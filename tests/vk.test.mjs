@@ -37,8 +37,8 @@ describe.skip('VK Integration Tests', () => {
   });
 
   test('should post message, get ID, and delete successfully', async () => {
-    // Step 1: Post test message
-    console.log('📝 Step 1: Posting test message...');
+    // Post test message
+    console.log('📝 Posting test message...');
     const postResult = await vkBroadcaster.send(testMessage);
     
     expect(postResult.success).toBe(true);
@@ -48,12 +48,12 @@ describe.skip('VK Integration Tests', () => {
     const messageId = postResult.messageId;
     console.log(`✅ Message posted successfully! Post ID: ${messageId}`);
     
-    // Step 2: Verify message ID is a valid number
+    // Verify message ID is a valid number
     expect(typeof messageId).toBe('number');
     expect(messageId).toBeGreaterThan(0);
     
-    // Step 3: Verify message was actually created by fetching it
-    console.log('🔍 Step 2: Verifying message was actually created...');
+    // Verify message was actually created by fetching it
+    console.log('🔍 Verifying message was actually created...');
     try {
       const posts = await vkBroadcaster.vk.api.wall.get({
         owner_id: vkBroadcaster.config.ownerId,
@@ -71,12 +71,12 @@ describe.skip('VK Integration Tests', () => {
       console.log('🤔 Could not verify message creation:', verifyError.message);
     }
     
-    // Step 4: Wait before deletion
-    console.log('⏳ Step 3: Waiting 2 seconds before deletion...');
+    // Wait before deletion
+    console.log('⏳ Waiting 2 seconds before deletion...');
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Step 5: Delete the message via VKBroadcaster (not direct API)
-    console.log('🗑️ Step 4: Deleting test message via VKBroadcaster...');
+    // Delete the message via VKBroadcaster (not direct API)
+    console.log('🗑️ Deleting test message via VKBroadcaster...');
     
     // Note: VKBroadcaster doesn't have deleteMessage method yet, so using direct API
     // TODO: Implement deleteMessage method in VKBroadcaster for consistency
@@ -88,8 +88,8 @@ describe.skip('VK Integration Tests', () => {
     expect(deleteResult).toBeTruthy();
     console.log(`✅ Message deletion API call successful! Post ID: ${messageId}`);
     
-    // Step 6: Verify message was actually deleted
-    console.log('🔍 Step 5: Verifying message was actually deleted...');
+    // Verify message was actually deleted
+    console.log('🔍 Verifying message was actually deleted...');
     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for deletion to propagate
     
     try {

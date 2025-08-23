@@ -115,8 +115,8 @@ describe('Telegram Authentication & Messaging Tests', () => {
     console.log('📤 Testing complete message lifecycle...');
     const testMessage = '🧪 Test message - will be deleted automatically';
     
-    // Step 1: Send message
-    console.log('📝 Step 1: Sending test message...');
+    // Send message
+    console.log('📝 Sending test message...');
     const sendResult = await telegramBroadcaster.send(testMessage);
     
     expect(sendResult).toHaveProperty('success');
@@ -136,8 +136,8 @@ describe('Telegram Authentication & Messaging Tests', () => {
     console.log(`✅ Message sent successfully! ID: ${sendResult.messageId}`);
     console.log(`🔧 Method used: ${sendResult.method}`);
     
-    // Step 2: Verify message was actually created by fetching it
-    console.log('🔍 Step 2: Verifying message was actually created...');
+    // Verify message was actually created by fetching it
+    console.log('🔍 Verifying message was actually created...');
     try {
       const telegram = (await import('telegram')).default;
       const fs = await import('fs');
@@ -179,12 +179,12 @@ describe('Telegram Authentication & Messaging Tests', () => {
       console.log('🤔 Could not verify message creation:', verifyError.message);
     }
     
-    // Step 3: Wait a moment before deletion
-    console.log('⏳ Step 3: Waiting 2 seconds before deletion...');
+    // Wait a moment before deletion
+    console.log('⏳ Waiting 2 seconds before deletion...');
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Step 4: Delete the message
-    console.log('🗑️ Step 4: Deleting test message...');
+    // Delete the message
+    console.log('🗑️ Deleting test message...');
     const deleteResult = await telegramBroadcaster.deleteMessage(
       sendResult.messageId, 
       sendResult.chatEntity
@@ -198,8 +198,8 @@ describe('Telegram Authentication & Messaging Tests', () => {
       console.log(`✅ Message deleted successfully! ID: ${sendResult.messageId}`);
       console.log('📋 Delete result:', deleteResult.result?.className || 'Success');
       
-      // Step 5: Verify the message was actually deleted
-      console.log('🔍 Step 5: Verifying message was actually deleted...');
+      // Verify the message was actually deleted
+      console.log('🔍 Verifying message was actually deleted...');
       
       // Wait a moment for deletion to propagate
       await new Promise(resolve => setTimeout(resolve, 2000));
