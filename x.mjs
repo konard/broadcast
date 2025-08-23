@@ -185,7 +185,7 @@ export class XBroadcaster {
   /**
    * Send tweet to X.com with rate limit handling
    */
-  async send(message, maxRetries = 3) {
+  async send(message, maxRetries = 10) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         this.logger.debug(`Posting tweet to X.com using ${this.authMethod} (attempt ${attempt}/${maxRetries})`);
@@ -241,7 +241,7 @@ export class XBroadcaster {
   /**
    * Delete tweet from X.com with rate limit handling
    */
-  async deleteMessage(tweetId, maxRetries = 3) {
+  async deleteMessage(tweetId, maxRetries = 10) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         this.logger.debug(`Deleting tweet from X.com: ${tweetId} (attempt ${attempt}/${maxRetries})`);

@@ -5,7 +5,7 @@ import XBroadcaster from '../x.mjs';
  * Helper function to verify tweet creation with rate limit handling
  * Implements exponential backoff for 429 (rate limit) errors
  */
-async function verifyTweetWithRetry(broadcaster, tweetId, expectedText, maxRetries = 3) {
+async function verifyTweetWithRetry(broadcaster, tweetId, expectedText, maxRetries = 10) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const tweetData = await broadcaster.client.v2.singleTweet(tweetId, {
