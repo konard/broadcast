@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import TelegramBroadcaster from '../telegram.mjs';
 
 /**
@@ -8,9 +8,48 @@ import TelegramBroadcaster from '../telegram.mjs';
 
 describe('Telegram Authentication & Messaging Tests', () => {
   let telegramBroadcaster;
+  let sharedTelegramClient;
+  let sharedApi;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     telegramBroadcaster = new TelegramBroadcaster();
+    
+    // Initialize shared connection for user auth tests if configured
+    if (telegramBroadcaster.config.hasUserAuth) {
+      try {
+        const { initTelegramUserConnection } = await import('../telegram.mjs');
+        const connectionResult = await initTelegramUserConnection(
+          telegramBroadcaster.config, 
+          telegramBroadcaster.logger
+        );
+        sharedTelegramClient = connectionResult.client;
+        sharedApi = connectionResult.Api;
+        
+        // Set the shared client on the broadcaster to reuse connections
+        telegramBroadcaster.setTestClient(sharedTelegramClient, sharedApi);
+        
+        console.log('🔗 Shared Telegram connection established for tests');
+      } catch (error) {
+        console.warn('⚠️  Failed to establish shared Telegram connection:', error.message);
+      }
+    }
+  });
+
+  afterAll(async () => {
+    // Clear test client from broadcaster
+    if (telegramBroadcaster && telegramBroadcaster.clearTestClient) {
+      telegramBroadcaster.clearTestClient();
+    }
+    
+    // Clean up shared connection
+    if (sharedTelegramClient) {
+      try {
+        await sharedTelegramClient.disconnect();
+        console.log('🔌 Shared Telegram connection closed');
+      } catch (error) {
+        console.warn('⚠️  Error closing shared connection:', error.message);
+      }
+    }
   });
 
   test('should detect available authentication methods', () => {
@@ -139,32 +178,13 @@ describe('Telegram Authentication & Messaging Tests', () => {
     // Verify message was actually created by fetching it
     console.log('🔍 Verifying message was actually created...');
     try {
-      const telegram = (await import('telegram')).default;
-      const fs = await import('fs');
-      const { TelegramClient } = telegram;
-      const { StringSession } = telegram.sessions;
-      
-      const sessionFile = './.telegram_session';
-      let storedSession = '';
-      if (fs.existsSync(sessionFile)) {
-        storedSession = (await fs.promises.readFile(sessionFile, 'utf8')).trim();
-      }
-      
-      const stringSession = new StringSession(storedSession);
-      const client = new TelegramClient(stringSession, 
-        parseInt(config.userBotApiId, 10), 
-        config.userBotApiHash, 
-        { connectionRetries: 5 }
-      );
-      
-      await client.connect();
-      
-      try {
+      if (sharedTelegramClient && sharedApi) {
+        // Use shared connection for verification
         const entity = config.userBotChatUsername 
-          ? await client.getEntity(config.userBotChatUsername)
-          : await client.getEntity(parseInt(config.userBotChatId, 10));
+          ? await sharedTelegramClient.getEntity(config.userBotChatUsername)
+          : await sharedTelegramClient.getEntity(parseInt(config.userBotChatId, 10));
         
-        const messages = await client.getMessages(entity, { ids: [sendResult.messageId] });
+        const messages = await sharedTelegramClient.getMessages(entity, { ids: [sendResult.messageId] });
         
         if (messages.length > 0 && messages[0].id === sendResult.messageId) {
           console.log(`✅ VERIFIED: Message exists on channel: "${messages[0].message}"`);
@@ -172,8 +192,44 @@ describe('Telegram Authentication & Messaging Tests', () => {
         } else {
           console.log('⚠️  WARNING: Could not find the posted message');
         }
-      } finally {
-        await client.disconnect();
+      } else {
+        // Fallback to individual connection if shared connection not available
+        const telegram = (await import('telegram')).default;
+        const fs = await import('fs');
+        const { TelegramClient } = telegram;
+        const { StringSession } = telegram.sessions;
+        
+        const sessionFile = './.telegram_session';
+        let storedSession = '';
+        if (fs.existsSync(sessionFile)) {
+          storedSession = (await fs.promises.readFile(sessionFile, 'utf8')).trim();
+        }
+        
+        const stringSession = new StringSession(storedSession);
+        const client = new TelegramClient(stringSession, 
+          parseInt(config.userBotApiId, 10), 
+          config.userBotApiHash, 
+          { connectionRetries: 5 }
+        );
+        
+        await client.connect();
+        
+        try {
+          const entity = config.userBotChatUsername 
+            ? await client.getEntity(config.userBotChatUsername)
+            : await client.getEntity(parseInt(config.userBotChatId, 10));
+          
+          const messages = await client.getMessages(entity, { ids: [sendResult.messageId] });
+          
+          if (messages.length > 0 && messages[0].id === sendResult.messageId) {
+            console.log(`✅ VERIFIED: Message exists on channel: "${messages[0].message}"`);
+            expect(messages[0].message).toBe(testMessage);
+          } else {
+            console.log('⚠️  WARNING: Could not find the posted message');
+          }
+        } finally {
+          await client.disconnect();
+        }
       }
     } catch (verifyError) {
       console.log('🤔 Could not verify message creation:', verifyError.message);
@@ -204,34 +260,15 @@ describe('Telegram Authentication & Messaging Tests', () => {
       // Wait a moment for deletion to propagate
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Try to fetch the message to verify it's gone - using direct API access
+      // Try to fetch the message to verify it's gone - using shared connection if available
       try {
-        const telegram = (await import('telegram')).default;
-        const fs = await import('fs');
-        const { TelegramClient, Api } = telegram;
-        const { StringSession } = telegram.sessions;
-        
-        const sessionFile = './.telegram_session';
-        let storedSession = '';
-        if (fs.existsSync(sessionFile)) {
-          storedSession = (await fs.promises.readFile(sessionFile, 'utf8')).trim();
-        }
-        
-        const stringSession = new StringSession(storedSession);
-        const client = new TelegramClient(stringSession, 
-          parseInt(config.userBotApiId, 10), 
-          config.userBotApiHash, 
-          { connectionRetries: 5 }
-        );
-        
-        await client.connect();
-        
-        try {
+        if (sharedTelegramClient && sharedApi) {
+          // Use shared connection for verification
           const entity = config.userBotChatUsername 
-            ? await client.getEntity(config.userBotChatUsername)
-            : await client.getEntity(parseInt(config.userBotChatId, 10));
+            ? await sharedTelegramClient.getEntity(config.userBotChatUsername)
+            : await sharedTelegramClient.getEntity(parseInt(config.userBotChatId, 10));
           
-          const messagesAfterDelete = await client.getMessages(entity, { ids: [sendResult.messageId] });
+          const messagesAfterDelete = await sharedTelegramClient.getMessages(entity, { ids: [sendResult.messageId] });
           
           if (messagesAfterDelete.length === 0 || 
               !messagesAfterDelete[0] || 
@@ -243,8 +280,48 @@ describe('Telegram Authentication & Messaging Tests', () => {
           } else {
             console.log('🤔 UNCLEAR: Got unexpected response from message fetch');
           }
-        } finally {
-          await client.disconnect();
+        } else {
+          // Fallback to individual connection
+          const telegram = (await import('telegram')).default;
+          const fs = await import('fs');
+          const { TelegramClient, Api } = telegram;
+          const { StringSession } = telegram.sessions;
+          
+          const sessionFile = './.telegram_session';
+          let storedSession = '';
+          if (fs.existsSync(sessionFile)) {
+            storedSession = (await fs.promises.readFile(sessionFile, 'utf8')).trim();
+          }
+          
+          const stringSession = new StringSession(storedSession);
+          const client = new TelegramClient(stringSession, 
+            parseInt(config.userBotApiId, 10), 
+            config.userBotApiHash, 
+            { connectionRetries: 5 }
+          );
+          
+          await client.connect();
+          
+          try {
+            const entity = config.userBotChatUsername 
+              ? await client.getEntity(config.userBotChatUsername)
+              : await client.getEntity(parseInt(config.userBotChatId, 10));
+            
+            const messagesAfterDelete = await client.getMessages(entity, { ids: [sendResult.messageId] });
+            
+            if (messagesAfterDelete.length === 0 || 
+                !messagesAfterDelete[0] || 
+                messagesAfterDelete[0].className === 'MessageEmpty') {
+              console.log('✅ VERIFIED: Message was actually deleted and cannot be fetched!');
+            } else if (messagesAfterDelete[0].id === sendResult.messageId) {
+              console.log('⚠️  WARNING: Message still exists and can be fetched - deletion may not have worked');
+              console.log(`   Content: "${messagesAfterDelete[0].message}"`);
+            } else {
+              console.log('🤔 UNCLEAR: Got unexpected response from message fetch');
+            }
+          } finally {
+            await client.disconnect();
+          }
         }
       } catch (verifyError) {
         // Error fetching might be good - could mean it's deleted

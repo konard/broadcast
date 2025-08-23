@@ -90,7 +90,7 @@ class TelegramConfig {
 /**
  * Initialize Telegram user client connection
  */
-async function initTelegramUserConnection(config, logger) {
+export async function initTelegramUserConnection(config, logger) {
   const { telegram, input } = await loadUserAuthDependencies();
   
   // Exit immediately on any unhandled rejections or uncaught exceptions
@@ -188,6 +188,22 @@ export class TelegramBroadcaster {
   }
 
   /**
+   * Set external client for testing (to reuse connections)
+   */
+  setTestClient(client, Api) {
+    this.testClient = client;
+    this.testApi = Api;
+  }
+
+  /**
+   * Clear test client
+   */
+  clearTestClient() {
+    this.testClient = null;
+    this.testApi = null;
+  }
+
+  /**
    * Check if this broadcaster is properly configured
    */
   isConfigured() {
@@ -268,17 +284,18 @@ export class TelegramBroadcaster {
   async sendViaUser(message) {
     this.logger.debug(`Sending message via User Client to: ${this.config.userBotChatUsername || this.config.userBotChatId}`);
     
-    return await usingTelegramUser(this.config, this.logger, async ({ client, Api }) => {
+    // Use test client if available, otherwise create new connection
+    if (this.testClient && this.testApi) {
       // Resolve chat entity
       let chatEntity;
       if (this.config.userBotChatUsername) {
-        chatEntity = await client.getEntity(this.config.userBotChatUsername);
+        chatEntity = await this.testClient.getEntity(this.config.userBotChatUsername);
       } else {
-        chatEntity = await client.getEntity(parseInt(this.config.userBotChatId, 10));
+        chatEntity = await this.testClient.getEntity(parseInt(this.config.userBotChatId, 10));
       }
       
       // Send message
-      const result = await client.sendMessage(chatEntity, {
+      const result = await this.testClient.sendMessage(chatEntity, {
         message: message,
         parseMode: 'html'
       });
@@ -292,7 +309,34 @@ export class TelegramBroadcaster {
         messageId: result.id,  // Return the message ID for deletion
         chatEntity: chatEntity  // Store the resolved chat entity for deletion
       };
-    });
+    } else {
+      // Original implementation with new connection
+      return await usingTelegramUser(this.config, this.logger, async ({ client, Api }) => {
+        // Resolve chat entity
+        let chatEntity;
+        if (this.config.userBotChatUsername) {
+          chatEntity = await client.getEntity(this.config.userBotChatUsername);
+        } else {
+          chatEntity = await client.getEntity(parseInt(this.config.userBotChatId, 10));
+        }
+        
+        // Send message
+        const result = await client.sendMessage(chatEntity, {
+          message: message,
+          parseMode: 'html'
+        });
+        
+        this.logger.info('✅ Message sent to Telegram via User Client successfully');
+        return {
+          success: true,
+          platform: this.name,
+          method: 'user',
+          result: result,
+          messageId: result.id,  // Return the message ID for deletion
+          chatEntity: chatEntity  // Store the resolved chat entity for deletion
+        };
+      });
+    }
   }
 
   /**
@@ -362,14 +406,15 @@ export class TelegramBroadcaster {
   async deleteViaUser(messageId, chatEntity = null) {
     this.logger.debug(`Deleting message via User Client: ${messageId}`);
     
-    return await usingTelegramUser(this.config, this.logger, async ({ client, Api }) => {
+    // Use test client if available, otherwise create new connection
+    if (this.testClient && this.testApi) {
       // Resolve chat entity if not provided
       let targetChatEntity = chatEntity;
       if (!targetChatEntity) {
         if (this.config.userBotChatUsername) {
-          targetChatEntity = await client.getEntity(this.config.userBotChatUsername);
+          targetChatEntity = await this.testClient.getEntity(this.config.userBotChatUsername);
         } else {
-          targetChatEntity = await client.getEntity(parseInt(this.config.userBotChatId, 10));
+          targetChatEntity = await this.testClient.getEntity(parseInt(this.config.userBotChatId, 10));
         }
       }
       
@@ -387,8 +432,8 @@ export class TelegramBroadcaster {
       if (targetChatEntity.className === 'Channel') {
         // Channels and supergroups use channels.deleteMessages
         this.logger.debug('Using Api.channels.deleteMessages for Channel');
-        result = await client.invoke(
-          new Api.channels.DeleteMessages({
+        result = await this.testClient.invoke(
+          new this.testApi.channels.DeleteMessages({
             channel: targetChatEntity,
             id: [messageId]
           })
@@ -398,8 +443,8 @@ export class TelegramBroadcaster {
         if (targetChatEntity.megagroup) {
           // Megagroups (supergroups) are technically channels
           this.logger.debug('Using Api.channels.deleteMessages for Megagroup');
-          result = await client.invoke(
-            new Api.channels.DeleteMessages({
+          result = await this.testClient.invoke(
+            new this.testApi.channels.DeleteMessages({
               channel: targetChatEntity,
               id: [messageId]
             })
@@ -407,8 +452,8 @@ export class TelegramBroadcaster {
         } else {
           // Regular group chats use messages.deleteMessages
           this.logger.debug('Using Api.messages.deleteMessages for regular Chat');
-          result = await client.invoke(
-            new Api.messages.DeleteMessages({
+          result = await this.testClient.invoke(
+            new this.testApi.messages.DeleteMessages({
               id: [messageId],
               revoke: true
             })
@@ -417,8 +462,8 @@ export class TelegramBroadcaster {
       } else {
         // User conversations use messages.deleteMessages
         this.logger.debug('Using Api.messages.deleteMessages for User conversation');
-        result = await client.invoke(
-          new Api.messages.DeleteMessages({
+        result = await this.testClient.invoke(
+          new this.testApi.messages.DeleteMessages({
             id: [messageId],
             revoke: true
           })
@@ -432,7 +477,80 @@ export class TelegramBroadcaster {
         method: 'user',
         result: result
       };
-    });
+    } else {
+      // Original implementation with new connection
+      return await usingTelegramUser(this.config, this.logger, async ({ client, Api }) => {
+        // Resolve chat entity if not provided
+        let targetChatEntity = chatEntity;
+        if (!targetChatEntity) {
+          if (this.config.userBotChatUsername) {
+            targetChatEntity = await client.getEntity(this.config.userBotChatUsername);
+          } else {
+            targetChatEntity = await client.getEntity(parseInt(this.config.userBotChatId, 10));
+          }
+        }
+        
+        // Log detailed entity information
+        this.logger.debug(`Chat entity details:`);
+        this.logger.debug(`- className: ${targetChatEntity.className}`);
+        this.logger.debug(`- id: ${targetChatEntity.id}`);
+        if (targetChatEntity.username) this.logger.debug(`- username: ${targetChatEntity.username}`);
+        if (targetChatEntity.title) this.logger.debug(`- title: ${targetChatEntity.title}`);
+        if (targetChatEntity.megagroup !== undefined) this.logger.debug(`- megagroup: ${targetChatEntity.megagroup}`);
+        if (targetChatEntity.broadcast !== undefined) this.logger.debug(`- broadcast: ${targetChatEntity.broadcast}`);
+        
+        // Determine the correct API method based on entity type
+        let result;
+        if (targetChatEntity.className === 'Channel') {
+          // Channels and supergroups use channels.deleteMessages
+          this.logger.debug('Using Api.channels.deleteMessages for Channel');
+          result = await client.invoke(
+            new Api.channels.DeleteMessages({
+              channel: targetChatEntity,
+              id: [messageId]
+            })
+          );
+        } else if (targetChatEntity.className === 'Chat') {
+          // Regular group chats
+          if (targetChatEntity.megagroup) {
+            // Megagroups (supergroups) are technically channels
+            this.logger.debug('Using Api.channels.deleteMessages for Megagroup');
+            result = await client.invoke(
+              new Api.channels.DeleteMessages({
+                channel: targetChatEntity,
+                id: [messageId]
+              })
+            );
+          } else {
+            // Regular group chats use messages.deleteMessages
+            this.logger.debug('Using Api.messages.deleteMessages for regular Chat');
+            result = await client.invoke(
+              new Api.messages.DeleteMessages({
+                id: [messageId],
+                revoke: true
+              })
+            );
+          }
+        } else {
+          // User conversations use messages.deleteMessages
+          this.logger.debug('Using Api.messages.deleteMessages for User conversation');
+          result = await client.invoke(
+            new Api.messages.DeleteMessages({
+              id: [messageId],
+              revoke: true
+            })
+          );
+        }
+        
+        this.logger.info('✅ Message deleted from Telegram via User Client successfully');
+        return {
+          success: true,
+          platform: this.name,
+          method: 'user',
+          result: result
+        };
+      });
+    }
   }
 
   /**
