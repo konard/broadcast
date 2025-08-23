@@ -373,21 +373,29 @@ describe('Telegram Authentication & Messaging Tests', () => {
       return;
     }
     
-    // Try to delete a non-existent message
-    const invalidBroadcaster = new TelegramBroadcaster();
+    // Test deletion of a non-existent message using the same broadcaster instance
+    // but with a clearly invalid message ID that won't exist
     
     // Temporarily suppress logger to avoid confusing error messages
-    const originalError = invalidBroadcaster.logger.error;
-    invalidBroadcaster.logger.error = () => {}; // Suppress error logging for this test
+    const originalError = telegramBroadcaster.logger.error;
+    telegramBroadcaster.logger.error = () => {}; // Suppress error logging for this test
     
-    const result = await invalidBroadcaster.deleteMessage(999999999); // Non-existent message ID
+    const result = await telegramBroadcaster.deleteMessage(999999999); // Non-existent message ID
     
     // Restore original logger
-    invalidBroadcaster.logger.error = originalError;
+    telegramBroadcaster.logger.error = originalError;
     
     // Delete might succeed (if message doesn't exist) or fail (if not allowed)
+    // Both outcomes are acceptable for error handling test
     expect(result).toHaveProperty('success');
     expect(result).toHaveProperty('platform');
     expect(result.platform).toBe('telegram');
+    
+    // Log the result for debugging
+    if (result.success) {
+      console.log('ℹ️  Delete of non-existent message succeeded (acceptable)');
+    } else {
+      console.log('ℹ️  Delete of non-existent message failed (expected):', result.error);
+    }
   });
 });
