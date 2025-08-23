@@ -15,13 +15,35 @@ A powerful CLI tool built with Bun.sh for broadcasting messages to multiple plat
 
 ## Architecture
 
-The tool follows a modular architecture:
+The tool follows a modular architecture with complete independence between components:
 - **[`broadcast.mjs`](broadcast.mjs)** - Main CLI entry point using yargs
 - **[`logger.mjs`](logger.mjs)** - Shared logging utility
-- **[`telegram.mjs`](telegram.mjs)** - Telegram broadcaster implementation with its own config
-- **[`vk.mjs`](vk.mjs)** - VK broadcaster implementation with its own config
+- **[`telegram.mjs`](telegram.mjs)** - Telegram broadcaster with TelegramConfig class
+- **[`vk.mjs`](vk.mjs)** - VK broadcaster with VKConfig class
 
-Each broadcaster is completely independent and manages its own configuration using the `getenv` package to read environment variables.
+Each broadcaster is completely independent and manages its own configuration using the `getenv` package. No shared configuration dependencies exist between platforms.
+
+## VK Support
+
+The VK broadcaster supports both public groups and personal pages:
+
+### For VK Groups (Communities):
+```bash
+VK_OWNER_ID=-123456789    # Negative group ID
+VK_ACCESS_TOKEN=your_group_admin_token
+```
+- Requires admin rights to the group
+- Posts appear on the group's wall
+- Token needs `wall` scope
+
+### For Personal Pages:
+```bash
+VK_OWNER_ID=123456789     # Positive user ID
+VK_ACCESS_TOKEN=your_personal_token
+```
+- Posts to your personal wall
+- Token needs `wall` scope for your account
+- Must be a public profile for external posting
 
 ## Installation
 
@@ -53,7 +75,7 @@ Each broadcaster is completely independent and manages its own configuration usi
 
    # VK Configuration  
    VK_ACCESS_TOKEN=your_vk_token_here
-   VK_GROUP_ID=-123456789
+   VK_OWNER_ID=-123456789
    VK_API_VERSION=5.131
 
    # Optional
@@ -129,7 +151,7 @@ bun run broadcast.mjs test
 | `TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token from @BotFather | `123456:ABC-DEF...` |
 | `TELEGRAM_CHANNEL_ID` | Yes | Channel username or ID | `@mychannel` or `-1001234567890` |
 | `VK_ACCESS_TOKEN` | Yes | VK access token | `abc123def456...` |
-| `VK_GROUP_ID` | Yes | VK group/user ID (negative for groups) | `-123456789` |
+| `VK_OWNER_ID` | Yes | VK owner ID (negative for groups, positive for users) | `-123456789` or `123456789` |
 | `VK_API_VERSION` | No | VK API version | `5.131` (default) |
 | `LOG_LEVEL` | No | Logging level | `info` (default) |
 
@@ -159,9 +181,10 @@ bun run broadcast.mjs test
    - Required permissions: `wall` for posting to walls
    - For group walls, you need admin access to the group
 
-3. **Get Group ID:**
+3. **Get Owner ID:**
    - For groups: use negative group ID (e.g., `-123456789`)
-   - For user walls: use positive user ID
+   - For personal pages: use positive user ID (e.g., `123456789`)
+   - Groups require admin access for wall posting
 
 ## Examples
 
@@ -204,7 +227,7 @@ bun run broadcast.mjs send "Test message" --verbose
 
 **"VK API error" message:**
 - Verify access token has `wall` permissions
-- Check if group ID is correct (negative for groups)
+- Check if owner ID is correct (negative for groups, positive for users)
 - Ensure you have admin rights for group posting
 
 **"Failed to send" messages:**

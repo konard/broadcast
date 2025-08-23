@@ -11,7 +11,7 @@ dotenv.config();
 class VKConfig {
   constructor() {
     this.accessToken = getenv('VK_ACCESS_TOKEN', '');
-    this.groupId = getenv('VK_GROUP_ID', '');
+    this.ownerId = getenv('VK_OWNER_ID', '');
     this.apiVersion = getenv('VK_API_VERSION', '5.131');
     this.logLevel = getenv('LOG_LEVEL', 'info');
   }
@@ -27,8 +27,8 @@ class VKConfig {
       errors.push('VK_ACCESS_TOKEN is required');
     }
     
-    if (!this.groupId) {
-      errors.push('VK_GROUP_ID is required');
+    if (!this.ownerId) {
+      errors.push('VK_OWNER_ID is required');
     }
     
     return { errors };
@@ -76,10 +76,10 @@ export class VKBroadcaster {
    */
   async send(message) {
     try {
-      this.logger.debug(`Posting message to VK wall: ${this.config.groupId}`);
+      this.logger.debug(`Posting message to VK wall: ${this.config.ownerId}`);
       
       const params = new URLSearchParams({
-        owner_id: this.config.groupId,
+        owner_id: this.config.ownerId,
         message: message,
         access_token: this.config.accessToken,
         v: this.config.apiVersion
