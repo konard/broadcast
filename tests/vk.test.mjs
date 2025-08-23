@@ -1,98 +1,76 @@
-#!/usr/bin/env bun
-
-import { VK } from 'vk-io';
+import { describe, test, expect, beforeAll } from 'bun:test';
 import VKBroadcaster from '../vk.mjs';
 
 /**
- * VK Integration Test
- * Posts a 'test' message, gets the post ID, and deletes it immediately
+ * VK Integration Test Suite
+ * Tests VK broadcasting functionality with post/delete cycle
  */
 
-async function runVKTest() {
-  console.log('🧪 Starting VK Integration Test...\n');
+describe('VK Integration Tests', () => {
+  let vkBroadcaster;
+  let testMessage;
 
-  try {
-    // Initialize VK broadcaster
-    const vkBroadcaster = new VKBroadcaster();
+  beforeAll(() => {
+    vkBroadcaster = new VKBroadcaster();
+    testMessage = 'test';
+  });
 
-    // Check if VK is configured
+  test('should have valid VK configuration', () => {
     if (!vkBroadcaster.config.isValid) {
       const errors = vkBroadcaster.config.validate().errors;
       console.error('❌ VK Configuration Error:');
       errors.forEach(error => console.error(`   - ${error}`));
       console.error('\n💡 Please set VK_ACCESS_TOKEN and VK_OWNER_ID in your environment or .env file');
-      process.exit(1);
     }
-
-    console.log('✅ VK Configuration is valid');
-    console.log(`📍 Target: ${vkBroadcaster.config.ownerId}`);
-    console.log('');
-
-    // Step 1: Post test message
-    console.log('📝 Step 1: Posting test message...');
-    const testMessage = 'test';
-    const postResult = await vkBroadcaster.send(testMessage);
-
-    if (!postResult.success) {
-      console.error('❌ Failed to post message:', postResult.error);
-      process.exit(1);
-    }
-
-    const messageId = postResult.messageId;
-    console.log(`✅ Message posted successfully!`);
-    console.log(`📋 Post ID: ${messageId}`);
-    console.log(`📄 Message: "${testMessage}"`);
-    console.log('');
-
-    // Step 2: Verify message ID was returned
-    if (!messageId) {
-      console.error('❌ No message ID returned from VKBroadcaster');
-      process.exit(1);
-    }
-
-    console.log('✅ Message ID successfully retrieved from VKBroadcaster');
-    console.log('');
-
-    // Step 3: Delete the message immediately
-    console.log('🗑️  Step 2: Deleting test message...');
     
-    if (!vkBroadcaster.vk) {
-      console.error('❌ VK instance not available for deletion');
-      process.exit(1);
-    }
+    expect(vkBroadcaster.config.isValid).toBe(true);
+    expect(vkBroadcaster.config.accessToken).toBeTruthy();
+    expect(vkBroadcaster.config.ownerId).toBeTruthy();
+  });
 
-    try {
-      await vkBroadcaster.vk.api.wall.delete({
-        owner_id: vkBroadcaster.config.ownerId,
-        post_id: messageId
-      });
+  test('should have VK instance initialized', () => {
+    expect(vkBroadcaster.vk).toBeTruthy();
+    expect(vkBroadcaster.vk.api).toBeTruthy();
+  });
 
-      console.log('✅ Message deleted successfully!');
-      console.log(`🗑️  Deleted post ID: ${messageId}`);
-    } catch (deleteError) {
-      console.error('❌ Failed to delete message:', deleteError.message);
-      console.warn('⚠️  The test message may still be visible on the wall');
-    }
+  test('should post message, get ID, and delete successfully', async () => {
+    // Step 1: Post test message
+    console.log('📝 Posting test message...');
+    const postResult = await vkBroadcaster.send(testMessage);
+    
+    expect(postResult.success).toBe(true);
+    expect(postResult.platform).toBe('vk');
+    expect(postResult.messageId).toBeTruthy();
+    
+    const messageId = postResult.messageId;
+    console.log(`✅ Message posted successfully! Post ID: ${messageId}`);
+    
+    // Step 2: Verify message ID is a valid number
+    expect(typeof messageId).toBe('number');
+    expect(messageId).toBeGreaterThan(0);
+    
+    // Step 3: Delete the message immediately
+    console.log('🗑️  Deleting test message...');
+    
+    const deleteResult = await vkBroadcaster.vk.api.wall.delete({
+      owner_id: vkBroadcaster.config.ownerId,
+      post_id: messageId
+    });
+    
+    expect(deleteResult).toBeTruthy();
+    console.log(`✅ Message deleted successfully! Post ID: ${messageId}`);
+  }, 10000); // 10 second timeout for API calls
 
-    console.log('');
-    console.log('🎉 VK Integration Test completed successfully!');
-    console.log('');
-    console.log('📊 Test Summary:');
-    console.log('   ✅ Configuration validation');
-    console.log('   ✅ Message posting');
-    console.log('   ✅ Message ID retrieval');
-    console.log('   ✅ Message deletion');
-    console.log('');
-
-  } catch (error) {
-    console.error('❌ VK Test failed:', error.message);
-    console.error('Stack trace:', error.stack);
-    process.exit(1);
-  }
-}
-
-// Run the test
-runVKTest().catch(error => {
-  console.error('❌ Unhandled error in VK test:', error);
-  process.exit(1);
+  test('should handle send errors gracefully', async () => {
+    // Create a broadcaster with invalid config to test error handling
+    const invalidBroadcaster = new VKBroadcaster();
+    // Clear the VK instance to simulate error
+    invalidBroadcaster.vk = null;
+    
+    const result = await invalidBroadcaster.send('test');
+    
+    expect(result.success).toBe(false);
+    expect(result.platform).toBe('vk');
+    expect(result.error).toBeTruthy();
+  });
 });
