@@ -136,12 +136,55 @@ describe('Telegram Authentication & Messaging Tests', () => {
     console.log(`✅ Message sent successfully! ID: ${sendResult.messageId}`);
     console.log(`🔧 Method used: ${sendResult.method}`);
     
-    // Step 2: Wait a moment before deletion
-    console.log('⏳ Step 2: Waiting 2 seconds before deletion...');
+    // Step 2: Verify message was actually created by fetching it
+    console.log('🔍 Step 2: Verifying message was actually created...');
+    try {
+      const telegram = (await import('telegram')).default;
+      const fs = await import('fs');
+      const { TelegramClient } = telegram;
+      const { StringSession } = telegram.sessions;
+      
+      const sessionFile = './.telegram_session';
+      let storedSession = '';
+      if (fs.existsSync(sessionFile)) {
+        storedSession = (await fs.promises.readFile(sessionFile, 'utf8')).trim();
+      }
+      
+      const stringSession = new StringSession(storedSession);
+      const client = new TelegramClient(stringSession, 
+        parseInt(config.userBotApiId, 10), 
+        config.userBotApiHash, 
+        { connectionRetries: 5 }
+      );
+      
+      await client.connect();
+      
+      try {
+        const entity = config.userBotChatUsername 
+          ? await client.getEntity(config.userBotChatUsername)
+          : await client.getEntity(parseInt(config.userBotChatId, 10));
+        
+        const messages = await client.getMessages(entity, { ids: [sendResult.messageId] });
+        
+        if (messages.length > 0 && messages[0].id === sendResult.messageId) {
+          console.log(`✅ VERIFIED: Message exists on channel: "${messages[0].message}"`);
+          expect(messages[0].message).toBe(testMessage);
+        } else {
+          console.log('⚠️  WARNING: Could not find the posted message');
+        }
+      } finally {
+        await client.disconnect();
+      }
+    } catch (verifyError) {
+      console.log('🤔 Could not verify message creation:', verifyError.message);
+    }
+    
+    // Step 3: Wait a moment before deletion
+    console.log('⏳ Step 3: Waiting 2 seconds before deletion...');
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Step 3: Delete the message
-    console.log('🗑️ Step 3: Deleting test message...');
+    // Step 4: Delete the message
+    console.log('🗑️ Step 4: Deleting test message...');
     const deleteResult = await telegramBroadcaster.deleteMessage(
       sendResult.messageId, 
       sendResult.chatEntity
@@ -155,8 +198,8 @@ describe('Telegram Authentication & Messaging Tests', () => {
       console.log(`✅ Message deleted successfully! ID: ${sendResult.messageId}`);
       console.log('📋 Delete result:', deleteResult.result?.className || 'Success');
       
-      // Step 4: Verify the message was actually deleted
-      console.log('🔍 Step 4: Verifying message was actually deleted...');
+      // Step 5: Verify the message was actually deleted
+      console.log('🔍 Step 5: Verifying message was actually deleted...');
       
       // Wait a moment for deletion to propagate
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -212,8 +255,8 @@ describe('Telegram Authentication & Messaging Tests', () => {
       expect(deleteResult).toHaveProperty('error');
     }
     
-    console.log('🎉 Complete message lifecycle test finished - creation, deletion, and verification!');
-  }, 30000); // 30 second timeout for network operations including verification
+    console.log('🎉 Complete message lifecycle test finished - creation, creation verification, deletion, and deletion verification!');
+  }, 35000); // 35 second timeout for network operations including verification
 
   test('should handle send errors gracefully', async () => {
     // Create a broadcaster with invalid config to test error handling

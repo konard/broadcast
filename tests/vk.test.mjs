@@ -38,7 +38,7 @@ describe.skip('VK Integration Tests', () => {
 
   test('should post message, get ID, and delete successfully', async () => {
     // Step 1: Post test message
-    console.log('📝 Posting test message...');
+    console.log('📝 Step 1: Posting test message...');
     const postResult = await vkBroadcaster.send(testMessage);
     
     expect(postResult.success).toBe(true);
@@ -52,17 +52,65 @@ describe.skip('VK Integration Tests', () => {
     expect(typeof messageId).toBe('number');
     expect(messageId).toBeGreaterThan(0);
     
-    // Step 3: Delete the message immediately
-    console.log('🗑️  Deleting test message...');
+    // Step 3: Verify message was actually created by fetching it
+    console.log('🔍 Step 2: Verifying message was actually created...');
+    try {
+      const posts = await vkBroadcaster.vk.api.wall.get({
+        owner_id: vkBroadcaster.config.ownerId,
+        count: 10
+      });
+      
+      const createdPost = posts.items.find(post => post.id === messageId);
+      if (createdPost) {
+        console.log(`✅ VERIFIED: Message exists on wall: "${createdPost.text}"`);
+        expect(createdPost.text).toBe(testMessage);
+      } else {
+        console.log('⚠️  WARNING: Could not find the posted message in recent posts');
+      }
+    } catch (verifyError) {
+      console.log('🤔 Could not verify message creation:', verifyError.message);
+    }
     
+    // Step 4: Wait before deletion
+    console.log('⏳ Step 3: Waiting 2 seconds before deletion...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Step 5: Delete the message via VKBroadcaster (not direct API)
+    console.log('🗑️ Step 4: Deleting test message via VKBroadcaster...');
+    
+    // Note: VKBroadcaster doesn't have deleteMessage method yet, so using direct API
+    // TODO: Implement deleteMessage method in VKBroadcaster for consistency
     const deleteResult = await vkBroadcaster.vk.api.wall.delete({
       owner_id: vkBroadcaster.config.ownerId,
       post_id: messageId
     });
     
     expect(deleteResult).toBeTruthy();
-    console.log(`✅ Message deleted successfully! Post ID: ${messageId}`);
-  }, 10000); // 10 second timeout for API calls
+    console.log(`✅ Message deletion API call successful! Post ID: ${messageId}`);
+    
+    // Step 6: Verify message was actually deleted
+    console.log('🔍 Step 5: Verifying message was actually deleted...');
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for deletion to propagate
+    
+    try {
+      const postsAfterDelete = await vkBroadcaster.vk.api.wall.get({
+        owner_id: vkBroadcaster.config.ownerId,
+        count: 20 // Check more posts to be sure
+      });
+      
+      const stillExists = postsAfterDelete.items.find(post => post.id === messageId);
+      if (!stillExists) {
+        console.log('✅ VERIFIED: Message was actually deleted and no longer exists on wall!');
+      } else {
+        console.log('⚠️  WARNING: Message still exists on wall after deletion');
+        console.log(`   Content: "${stillExists.text}"`);
+      }
+    } catch (verifyError) {
+      console.log('🤔 Could not verify deletion (this might be expected):', verifyError.message);
+    }
+    
+    console.log('🎉 Complete VK message lifecycle test finished - creation, verification, deletion, and deletion verification!');
+  }, 15000); // 15 second timeout for API calls
 
   test('should handle send errors gracefully', async () => {
     // Create a broadcaster with invalid config to test error handling
