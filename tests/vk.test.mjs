@@ -4,9 +4,12 @@ import VKBroadcaster from '../vk.mjs';
 /**
  * VK Integration Test Suite
  * Tests VK broadcasting functionality with post/delete cycle
+ * 
+ * NOTE: These tests are skipped to avoid real API requests
+ * To enable: replace 'describe.skip' with 'describe'
  */
 
-describe('VK Integration Tests', () => {
+describe.skip('VK Integration Tests', () => {
   let vkBroadcaster;
   let testMessage;
 
