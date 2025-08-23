@@ -444,6 +444,14 @@ export class TelegramBroadcaster {
       const result = await this.send(testMessage);
       
       if (result.success) {
+        // Clean up the test message
+        try {
+          await this.deleteMessage(result.messageId, result.chatEntity);
+          this.logger.debug('Test message cleaned up successfully');
+        } catch (deleteError) {
+          this.logger.warn('Failed to clean up test message:', deleteError.message);
+        }
+        
         return {
           success: true,
           platform: this.name,

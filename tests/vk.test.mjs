@@ -9,7 +9,7 @@ import VKBroadcaster from '../vk.mjs';
  * To enable: replace 'describe.skip' with 'describe'
  */
 
-describe.skip('VK Integration Tests', () => {
+describe('VK Integration Tests', () => {
   let vkBroadcaster;
   let testMessage;
 
@@ -75,18 +75,14 @@ describe.skip('VK Integration Tests', () => {
     console.log('⏳ Waiting 2 seconds before deletion...');
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Delete the message via VKBroadcaster (not direct API)
+    // Delete the message via VKBroadcaster
     console.log('🗑️ Deleting test message via VKBroadcaster...');
     
-    // Note: VKBroadcaster doesn't have deleteMessage method yet, so using direct API
-    // TODO: Implement deleteMessage method in VKBroadcaster for consistency
-    const deleteResult = await vkBroadcaster.vk.api.wall.delete({
-      owner_id: vkBroadcaster.config.ownerId,
-      post_id: messageId
-    });
+    const deleteResult = await vkBroadcaster.deleteMessage(messageId);
     
-    expect(deleteResult).toBeTruthy();
-    console.log(`✅ Message deletion API call successful! Post ID: ${messageId}`);
+    expect(deleteResult.success).toBe(true);
+    expect(deleteResult.platform).toBe('vk');
+    console.log(`✅ Message deletion successful! Post ID: ${messageId}`);
     
     // Verify message was actually deleted
     console.log('🔍 Verifying message was actually deleted...');

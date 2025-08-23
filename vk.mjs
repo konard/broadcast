@@ -112,6 +112,38 @@ export class VKBroadcaster {
   }
 
   /**
+   * Delete message from VK wall
+   */
+  async deleteMessage(messageId) {
+    try {
+      this.logger.debug(`Deleting message from VK wall: ${messageId}`);
+      
+      if (!this.vk) {
+        throw new Error('VK instance not initialized - check access token');
+      }
+      
+      const result = await this.vk.api.wall.delete({
+        owner_id: this.config.ownerId,
+        post_id: messageId
+      });
+
+      this.logger.info('✅ Message deleted from VK wall successfully');
+      return {
+        success: true,
+        platform: this.name,
+        result: result
+      };
+    } catch (error) {
+      this.logger.error('Failed to delete VK message:', error.message);
+      return {
+        success: false,
+        platform: this.name,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Test the VK configuration and connectivity
    */
   async test() {
@@ -120,6 +152,14 @@ export class VKBroadcaster {
       const result = await this.send(testMessage);
       
       if (result.success) {
+        // Clean up the test message
+        try {
+          await this.deleteMessage(result.messageId);
+          this.logger.debug('Test message cleaned up successfully');
+        } catch (deleteError) {
+          this.logger.warn('Failed to clean up test message:', deleteError.message);
+        }
+        
         return {
           success: true,
           platform: this.name,
