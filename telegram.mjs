@@ -257,7 +257,8 @@ export class TelegramBroadcaster {
       success: true,
       platform: this.name,
       method: 'bot',
-      result: result
+      result: result,
+      messageId: result.result.message_id  // Return the message ID for deletion
     };
   }
 
@@ -283,6 +284,101 @@ export class TelegramBroadcaster {
       });
       
       this.logger.info('✅ Message sent to Telegram via User Client successfully');
+      return {
+        success: true,
+        platform: this.name,
+        method: 'user',
+        result: result,
+        messageId: result.id,  // Return the message ID for deletion
+        chatEntity: chatEntity  // Store the resolved chat entity for deletion
+      };
+    });
+  }
+
+  /**
+   * Delete message by ID
+   */
+  async deleteMessage(messageId, chatEntityOrId = null) {
+    try {
+      // Prefer bot authentication if available
+      if (this.config.hasBotAuth) {
+        return await this.deleteViaBot(messageId, chatEntityOrId);
+      } else if (this.config.hasUserAuth) {
+        return await this.deleteViaUser(messageId, chatEntityOrId);
+      } else {
+        throw new Error('No valid authentication method configured');
+      }
+    } catch (error) {
+      this.logger.error('Failed to delete Telegram message:', error.message);
+      return {
+        success: false,
+        platform: this.name,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Delete message via Bot API
+   */
+  async deleteViaBot(messageId, chatId = null) {
+    this.logger.debug(`Deleting message via Bot API: ${messageId}`);
+    
+    if (!this.baseUrl) {
+      throw new Error('Telegram bot token not configured');
+    }
+    
+    const targetChatId = chatId || this.config.channelId;
+    
+    const response = await fetch(`${this.baseUrl}/deleteMessage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        chat_id: targetChatId,
+        message_id: messageId
+      })
+    });
+
+    const result = await response.json();
+    
+    if (!result.ok) {
+      throw new Error(`Telegram API error: ${result.description}`);
+    }
+
+    this.logger.info('✅ Message deleted from Telegram via Bot API successfully');
+    return {
+      success: true,
+      platform: this.name,
+      method: 'bot',
+      result: result
+    };
+  }
+
+  /**
+   * Delete message via User Client
+   */
+  async deleteViaUser(messageId, chatEntity = null) {
+    this.logger.debug(`Deleting message via User Client: ${messageId}`);
+    
+    return await usingTelegramUser(this.config, this.logger, async ({ client, Api }) => {
+      // Resolve chat entity if not provided
+      let targetChatEntity = chatEntity;
+      if (!targetChatEntity) {
+        if (this.config.userBotChatUsername) {
+          targetChatEntity = await client.getEntity(this.config.userBotChatUsername);
+        } else {
+          targetChatEntity = await client.getEntity(parseInt(this.config.userBotChatId, 10));
+        }
+      }
+      
+      // Delete message
+      const result = await client.deleteMessages(targetChatEntity, [messageId], {
+        revoke: true  // Delete for everyone
+      });
+      
+      this.logger.info('✅ Message deleted from Telegram via User Client successfully');
       return {
         success: true,
         platform: this.name,
