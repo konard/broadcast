@@ -31,14 +31,11 @@ describe.skip('X.com Integration Tests', () => {
     
     // Test authentication method detection
     console.log('🔍 Authentication methods detected:');
-    console.log(`   OAuth 2.0 User: ${xBroadcaster.config.hasOAuth2UserAuth ? '✅' : '❌'}`);
-    console.log(`   OAuth 1.0a User: ${xBroadcaster.config.hasOAuth1UserAuth ? '✅' : '❌'}`);
+    console.log(`   OAuth 1.0a User: ${xBroadcaster.config.hasUserAuth ? '✅' : '❌'}`);
     console.log(`   Bearer Token: ${xBroadcaster.config.hasBearerAuth ? '✅' : '❌'}`);
     
     // At least one should be configured
-    const hasAnyAuth = xBroadcaster.config.hasOAuth2UserAuth || 
-                      xBroadcaster.config.hasOAuth1UserAuth || 
-                      xBroadcaster.config.hasBearerAuth;
+    const hasAnyAuth = xBroadcaster.config.hasUserAuth || xBroadcaster.config.hasBearerAuth;
     expect(hasAnyAuth).toBe(true);
   });
 

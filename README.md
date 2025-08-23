@@ -71,27 +71,17 @@ VK_ACCESS_TOKEN=your_personal_token
 
 The X.com broadcaster supports multiple authentication methods for maximum flexibility:
 
-### OAuth 2.0 User Authentication (Recommended)
-```bash
-X_CLIENT_ID=your_client_id_here
-X_CLIENT_SECRET=your_client_secret_here
-X_ACCESS_TOKEN=your_access_token_here
-X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
-```
-- **Use case**: Modern user authentication, posting tweets
-- **Capabilities**: Post tweets, delete tweets, full user functionality
-- **Setup**: Create app at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
-
-### OAuth 1.0a User Authentication (Alternative)
+### OAuth 1.0a User Authentication (Standard)
 ```bash
 X_API_KEY=your_api_key_here
 X_API_KEY_SECRET=your_api_key_secret_here
 X_ACCESS_TOKEN=your_access_token_here
 X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
 ```
-- **Use case**: Legacy user authentication, posting tweets
+- **Use case**: Standard user authentication, posting tweets
 - **Capabilities**: Post tweets, delete tweets, full user functionality
 - **Setup**: Create app at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
+- **Note**: This matches the official X.com API terminology shown in the developer portal
 
 ### Bearer Token Authentication (Limited)
 ```bash
@@ -140,8 +130,8 @@ X_BEARER_TOKEN=your_bearer_token_here
    VK_OWNER_ID=-123456789
 
    # X.com Configuration
-   X_CLIENT_ID=your_x_client_id_here
-   X_CLIENT_SECRET=your_x_client_secret_here
+   X_API_KEY=your_x_api_key_here
+   X_API_KEY_SECRET=your_x_api_key_secret_here
    X_ACCESS_TOKEN=your_x_access_token_here
    X_ACCESS_TOKEN_SECRET=your_x_access_token_secret_here
 
@@ -227,12 +217,10 @@ bun run broadcast.mjs test
 | `TELEGRAM_USER_BOT_CHAT_ID` | User Auth | Target chat ID (alternative to username) | `123456789` |
 | `VK_ACCESS_TOKEN` | Yes | VK access token | `abc123def456...` |
 | `VK_OWNER_ID` | Yes | VK owner ID (negative for groups, positive for users) | `-123456789` or `123456789` |
-| `X_CLIENT_ID` | OAuth 2.0 | X.com client ID from developer portal | `your_client_id` |
-| `X_CLIENT_SECRET` | OAuth 2.0 | X.com client secret from developer portal | `your_client_secret` |
+| `X_API_KEY` | User Auth | X.com API key from developer portal | `your_api_key` |
+| `X_API_KEY_SECRET` | User Auth | X.com API key secret from developer portal | `your_api_key_secret` |
 | `X_ACCESS_TOKEN` | User Auth | X.com access token | `your_access_token` |
 | `X_ACCESS_TOKEN_SECRET` | User Auth | X.com access token secret | `your_access_token_secret` |
-| `X_API_KEY` | OAuth 1.0a | X.com API key (alternative to client ID) | `your_api_key` |
-| `X_API_KEY_SECRET` | OAuth 1.0a | X.com API key secret (alternative to client secret) | `your_api_key_secret` |
 | `X_BEARER_TOKEN` | App-only | X.com bearer token (limited functionality) | `your_bearer_token` |
 | `LOG_LEVEL` | No | Logging level | `info` (default) |
 
@@ -294,15 +282,8 @@ bun run broadcast.mjs test
 
 2. **Generate API Credentials:**
    
-   **For OAuth 2.0 User Authentication (Recommended):**
-   - In your app settings, enable "OAuth 2.0" 
-   - Set redirect URL (can be localhost for CLI usage)
-   - Generate Client ID and Client Secret
-   - Generate Access Token and Access Token Secret with read/write permissions
-   - Configure: `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`
-   
-   **For OAuth 1.0a User Authentication (Alternative):**
-   - In your app settings, enable "OAuth 1.0a"
+   **For OAuth 1.0a User Authentication (Standard):**
+   - In your app settings, ensure "Read and Write" permissions are enabled
    - Generate API Key and API Key Secret
    - Generate Access Token and Access Token Secret with read/write permissions  
    - Configure: `X_API_KEY`, `X_API_KEY_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`
@@ -318,10 +299,9 @@ bun run broadcast.mjs test
    - Bearer token apps have read-only access by default
 
 4. **Authentication Notes:**
-   - OAuth 2.0 is the modern standard and recommended approach
-   - OAuth 1.0a is legacy but still widely supported
+   - OAuth 1.0a is the standard authentication method shown in the developer portal
    - Bearer tokens are useful for read-only operations and testing connectivity
-   - User authentication (OAuth 2.0/1.0a) is required for posting and deleting tweets
+   - User authentication (OAuth 1.0a) is required for posting and deleting tweets
 
 ## Examples
 
