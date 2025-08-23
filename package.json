@@ -17,7 +17,8 @@
   "dependencies": {
     "dotenv": "^16.3.1",
     "yargs": "^17.7.2",
-    "getenv": "^1.0.0"
+    "getenv": "^1.0.0",
+    "vk-io": "^4.9.0"
   },
   "engines": {
     "bun": ">=1.0.0"

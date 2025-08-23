@@ -1,5 +1,6 @@
 import getenv from 'getenv';
 import * as dotenv from 'dotenv';
+import { VK } from 'vk-io';
 import { Logger } from './logger.mjs';
 
 // Load environment variables
@@ -49,11 +50,18 @@ export class VKBroadcaster {
   constructor() {
     this.name = 'vk';
     this.displayName = 'VK';
-    this.baseUrl = 'https://api.vk.com/method';
     
     // Initialize VK-specific configuration
     this.config = new VKConfig();
     this.logger = new Logger(this.config.logLevel);
+    
+    // Initialize VK instance
+    this.vk = null;
+    if (this.config.accessToken) {
+      this.vk = new VK({
+        token: this.config.accessToken
+      });
+    }
   }
 
   /**
@@ -77,31 +85,21 @@ export class VKBroadcaster {
     try {
       this.logger.debug(`Posting message to VK wall: ${this.config.ownerId}`);
       
-      const params = new URLSearchParams({
-        owner_id: this.config.ownerId,
-        message: message,
-        access_token: this.config.accessToken
-      });
-
-      const response = await fetch(`${this.baseUrl}/wall.post`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: params
-      });
-
-      const result = await response.json();
-      
-      if (result.error) {
-        throw new Error(`VK API error: ${result.error.error_msg}`);
+      if (!this.vk) {
+        throw new Error('VK instance not initialized - check access token');
       }
+      
+      const result = await this.vk.api.wall.post({
+        owner_id: this.config.ownerId,
+        message: message
+      });
 
       this.logger.info('✅ Message posted to VK wall successfully');
       return {
         success: true,
         platform: this.name,
-        result: result
+        result: result,
+        messageId: result.post_id  // Return the message ID for potential deletion
       };
     } catch (error) {
       this.logger.error('Failed to post VK message:', error.message);
