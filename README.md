@@ -62,9 +62,13 @@ VK_ACCESS_TOKEN=your_personal_token
    bun install
    ```
 
-3. **Configure environment variables**
+3. **Initialize your environment configuration**
    ```bash
+   # Copy the example configuration
    cp .env.example .env
+   
+   # Alternative for Windows:
+   # copy .env.example .env
    ```
 
 4. **Edit `.env` file with your credentials**
