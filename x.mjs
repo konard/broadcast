@@ -183,73 +183,113 @@ export class XBroadcaster {
   }
 
   /**
-   * Send tweet to X.com
+   * Send tweet to X.com with rate limit handling
    */
-  async send(message) {
-    try {
-      this.logger.debug(`Posting tweet to X.com using ${this.authMethod}`);
-      
-      if (!this.client) {
-        throw new Error('X.com client not initialized - check authentication credentials');
-      }
+  async send(message, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.debug(`Posting tweet to X.com using ${this.authMethod} (attempt ${attempt}/${maxRetries})`);
+        
+        if (!this.client) {
+          throw new Error('X.com client not initialized - check authentication credentials');
+        }
 
-      // Check if bearer token is being used (which has limited posting capabilities)
-      if (this.authMethod === 'Bearer Token') {
-        throw new Error('Bearer token authentication cannot post tweets - user authentication required');
-      }
-      
-      const result = await this.client.v2.tweet(message);
+        // Check if bearer token is being used (which has limited posting capabilities)
+        if (this.authMethod === 'Bearer Token') {
+          throw new Error('Bearer token authentication cannot post tweets - user authentication required');
+        }
+        
+        const result = await this.client.v2.tweet(message);
 
-      this.logger.info('✅ Tweet posted to X.com successfully');
-      return {
-        success: true,
-        platform: this.name,
-        result: result,
-        messageId: result.data.id,  // Return the tweet ID for potential deletion
-        method: this.authMethod
-      };
-    } catch (error) {
-      this.logger.error('Failed to post X.com tweet:', error.message);
-      return {
-        success: false,
-        platform: this.name,
-        error: error.message
-      };
+        this.logger.info('✅ Tweet posted to X.com successfully');
+        return {
+          success: true,
+          platform: this.name,
+          result: result,
+          messageId: result.data.id,  // Return the tweet ID for potential deletion
+          method: this.authMethod
+        };
+      } catch (error) {
+        if (error.message.includes('429') || error.message.includes('rate limit')) {
+          const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          this.logger.warn(`🔄 Rate limit hit (429). Waiting ${waitTime/1000}s before retry ${attempt}/${maxRetries}...`);
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          } else {
+            this.logger.error('❌ Rate limit exceeded max retries for posting tweet');
+            return {
+              success: false,
+              platform: this.name,
+              error: `Rate limit exceeded after ${maxRetries} attempts: ${error.message}`
+            };
+          }
+        } else {
+          // Non-rate-limit error, don't retry
+          this.logger.error('Failed to post X.com tweet:', error.message);
+          return {
+            success: false,
+            platform: this.name,
+            error: error.message
+          };
+        }
+      }
     }
   }
 
   /**
-   * Delete tweet from X.com
+   * Delete tweet from X.com with rate limit handling
    */
-  async deleteMessage(tweetId) {
-    try {
-      this.logger.debug(`Deleting tweet from X.com: ${tweetId}`);
-      
-      if (!this.client) {
-        throw new Error('X.com client not initialized - check authentication credentials');
-      }
+  async deleteMessage(tweetId, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.debug(`Deleting tweet from X.com: ${tweetId} (attempt ${attempt}/${maxRetries})`);
+        
+        if (!this.client) {
+          throw new Error('X.com client not initialized - check authentication credentials');
+        }
 
-      // Check if bearer token is being used (which cannot delete tweets)
-      if (this.authMethod === 'Bearer Token') {
-        throw new Error('Bearer token authentication cannot delete tweets - user authentication required');
-      }
-      
-      const result = await this.client.v2.deleteTweet(tweetId);
+        // Check if bearer token is being used (which cannot delete tweets)
+        if (this.authMethod === 'Bearer Token') {
+          throw new Error('Bearer token authentication cannot delete tweets - user authentication required');
+        }
+        
+        const result = await this.client.v2.deleteTweet(tweetId);
 
-      this.logger.info('✅ Tweet deleted from X.com successfully');
-      return {
-        success: true,
-        platform: this.name,
-        result: result,
-        method: this.authMethod
-      };
-    } catch (error) {
-      this.logger.error('Failed to delete X.com tweet:', error.message);
-      return {
-        success: false,
-        platform: this.name,
-        error: error.message
-      };
+        this.logger.info('✅ Tweet deleted from X.com successfully');
+        return {
+          success: true,
+          platform: this.name,
+          result: result,
+          method: this.authMethod
+        };
+      } catch (error) {
+        if (error.message.includes('429') || error.message.includes('rate limit')) {
+          const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          this.logger.warn(`🔄 Rate limit hit (429). Waiting ${waitTime/1000}s before retry ${attempt}/${maxRetries}...`);
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          } else {
+            this.logger.error('❌ Rate limit exceeded max retries for deleting tweet');
+            return {
+              success: false,
+              platform: this.name,
+              error: `Rate limit exceeded after ${maxRetries} attempts: ${error.message}`
+            };
+          }
+        } else {
+          // Non-rate-limit error, don't retry
+          this.logger.error('Failed to delete X.com tweet:', error.message);
+          return {
+            success: false,
+            platform: this.name,
+            error: error.message
+          };
+        }
+      }
     }
   }
 

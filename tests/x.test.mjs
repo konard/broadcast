@@ -2,6 +2,38 @@ import { describe, test, expect, beforeAll } from 'bun:test';
 import XBroadcaster from '../x.mjs';
 
 /**
+ * Helper function to verify tweet creation with rate limit handling
+ * Implements exponential backoff for 429 (rate limit) errors
+ */
+async function verifyTweetWithRetry(broadcaster, tweetId, expectedText, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const tweetData = await broadcaster.client.v2.singleTweet(tweetId, {
+        'tweet.fields': ['text', 'created_at', 'author_id']
+      });
+      return tweetData;
+    } catch (error) {
+      if (error.message.includes('429') || error.message.includes('rate limit')) {
+        const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+        console.log(`🕰️ Rate limit hit (429). Waiting ${waitTime/1000}s before retry ${attempt}/${maxRetries}...`);
+        
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        } else {
+          console.log('⚠️  Rate limit exceeded max retries. Skipping verification.');
+          return null;
+        }
+      } else {
+        // Non-rate-limit error, don't retry
+        throw error;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * X.com Integration Test Suite
  * Tests X.com broadcasting functionality with post/delete cycle
  * 
@@ -124,11 +156,9 @@ describe('X.com Integration Tests', () => {
     // Verify tweet was actually created by fetching it
     console.log('🔍 Verifying tweet was actually created...');
     try {
-      const tweetData = await xBroadcaster.client.v2.singleTweet(tweetId, {
-        'tweet.fields': ['text', 'created_at', 'author_id']
-      });
+      const tweetData = await verifyTweetWithRetry(xBroadcaster, tweetId, testMessage);
       
-      if (tweetData.data) {
+      if (tweetData && tweetData.data) {
         console.log(`✅ VERIFIED: Tweet exists: "${tweetData.data.text}"`);
         expect(tweetData.data.text).toBe(testMessage);
         expect(tweetData.data.id).toBe(tweetId);
