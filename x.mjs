@@ -211,8 +211,20 @@ export class XBroadcaster {
         };
       } catch (error) {
         if (error.message.includes('429') || error.message.includes('rate limit')) {
-          const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
-          this.logger.warn(`🔄 Rate limit hit (429). Waiting ${waitTime/1000}s before retry ${attempt}/${maxRetries}...`);
+          // Try to extract rate limit reset time from error response
+          const resetTime = this.extractRateLimitResetTime(error);
+          let waitTime;
+          
+          if (resetTime) {
+            // Use the actual reset time from API response
+            const now = Math.floor(Date.now() / 1000); // Current time in seconds
+            waitTime = Math.max((resetTime - now) * 1000, 1000); // Convert to ms, minimum 1s
+            this.logger.warn(`🕰️ Rate limit hit (429). API reset at ${new Date(resetTime * 1000).toLocaleTimeString()}. Waiting ${Math.ceil(waitTime/1000)}s...`);
+          } else {
+            // Fallback to exponential backoff if no reset time available
+            waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s, etc.
+            this.logger.warn(`🔄 Rate limit hit (429). Using exponential backoff: waiting ${waitTime/1000}s before retry ${attempt}/${maxRetries}...`);
+          }
           
           if (attempt < maxRetries) {
             await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -266,8 +278,20 @@ export class XBroadcaster {
         };
       } catch (error) {
         if (error.message.includes('429') || error.message.includes('rate limit')) {
-          const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
-          this.logger.warn(`🔄 Rate limit hit (429). Waiting ${waitTime/1000}s before retry ${attempt}/${maxRetries}...`);
+          // Try to extract rate limit reset time from error response
+          const resetTime = this.extractRateLimitResetTime(error);
+          let waitTime;
+          
+          if (resetTime) {
+            // Use the actual reset time from API response
+            const now = Math.floor(Date.now() / 1000); // Current time in seconds
+            waitTime = Math.max((resetTime - now) * 1000, 1000); // Convert to ms, minimum 1s
+            this.logger.warn(`🕰️ Rate limit hit (429). API reset at ${new Date(resetTime * 1000).toLocaleTimeString()}. Waiting ${Math.ceil(waitTime/1000)}s...`);
+          } else {
+            // Fallback to exponential backoff if no reset time available
+            waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s, etc.
+            this.logger.warn(`🔄 Rate limit hit (429). Using exponential backoff: waiting ${waitTime/1000}s before retry ${attempt}/${maxRetries}...`);
+          }
           
           if (attempt < maxRetries) {
             await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -290,6 +314,61 @@ export class XBroadcaster {
           };
         }
       }
+    }
+  }
+
+  /**
+   * Extract rate limit reset time from X.com API error response
+   * @param {Error} error - The error object from the API call
+   * @returns {number|null} - Unix timestamp when rate limit resets, or null if not found
+   */
+  extractRateLimitResetTime(error) {
+    try {
+      // Check if error has response data with headers
+      if (error.response && error.response.headers) {
+        const headers = error.response.headers;
+        
+        // X.com API returns rate limit info in these headers:
+        // x-rate-limit-reset: Unix timestamp when limit resets
+        // x-rate-limit-remaining: Number of requests remaining
+        const resetHeader = headers['x-rate-limit-reset'] || headers['X-Rate-Limit-Reset'];
+        
+        if (resetHeader) {
+          const resetTime = parseInt(resetHeader, 10);
+          if (!isNaN(resetTime) && resetTime > 0) {
+            this.logger.debug(`Found rate limit reset time: ${resetTime} (${new Date(resetTime * 1000).toISOString()})`);
+            return resetTime;
+          }
+        }
+      }
+      
+      // Check if error has data property (different error structure)
+      if (error.data && error.data.headers) {
+        const resetHeader = error.data.headers['x-rate-limit-reset'] || error.data.headers['X-Rate-Limit-Reset'];
+        if (resetHeader) {
+          const resetTime = parseInt(resetHeader, 10);
+          if (!isNaN(resetTime) && resetTime > 0) {
+            this.logger.debug(`Found rate limit reset time in data: ${resetTime}`);
+            return resetTime;
+          }
+        }
+      }
+      
+      // Try to parse from error message if it contains reset time
+      const resetMatch = error.message.match(/reset.*?(\d{10})/i);
+      if (resetMatch) {
+        const resetTime = parseInt(resetMatch[1], 10);
+        if (!isNaN(resetTime) && resetTime > 0) {
+          this.logger.debug(`Extracted reset time from error message: ${resetTime}`);
+          return resetTime;
+        }
+      }
+      
+      this.logger.debug('No rate limit reset time found in error response');
+      return null;
+    } catch (parseError) {
+      this.logger.debug('Error parsing rate limit reset time:', parseError.message);
+      return null;
     }
   }
 
