@@ -373,10 +373,57 @@ export class TelegramBroadcaster {
         }
       }
       
-      // Delete message
-      const result = await client.deleteMessages(targetChatEntity, [messageId], {
-        revoke: true  // Delete for everyone
-      });
+      // Log detailed entity information
+      this.logger.debug(`Chat entity details:`);
+      this.logger.debug(`- className: ${targetChatEntity.className}`);
+      this.logger.debug(`- id: ${targetChatEntity.id}`);
+      if (targetChatEntity.username) this.logger.debug(`- username: ${targetChatEntity.username}`);
+      if (targetChatEntity.title) this.logger.debug(`- title: ${targetChatEntity.title}`);
+      if (targetChatEntity.megagroup !== undefined) this.logger.debug(`- megagroup: ${targetChatEntity.megagroup}`);
+      if (targetChatEntity.broadcast !== undefined) this.logger.debug(`- broadcast: ${targetChatEntity.broadcast}`);
+      
+      // Determine the correct API method based on entity type
+      let result;
+      if (targetChatEntity.className === 'Channel') {
+        // Channels and supergroups use channels.deleteMessages
+        this.logger.debug('Using Api.channels.deleteMessages for Channel');
+        result = await client.invoke(
+          new Api.channels.DeleteMessages({
+            channel: targetChatEntity,
+            id: [messageId]
+          })
+        );
+      } else if (targetChatEntity.className === 'Chat') {
+        // Regular group chats
+        if (targetChatEntity.megagroup) {
+          // Megagroups (supergroups) are technically channels
+          this.logger.debug('Using Api.channels.deleteMessages for Megagroup');
+          result = await client.invoke(
+            new Api.channels.DeleteMessages({
+              channel: targetChatEntity,
+              id: [messageId]
+            })
+          );
+        } else {
+          // Regular group chats use messages.deleteMessages
+          this.logger.debug('Using Api.messages.deleteMessages for regular Chat');
+          result = await client.invoke(
+            new Api.messages.DeleteMessages({
+              id: [messageId],
+              revoke: true
+            })
+          );
+        }
+      } else {
+        // User conversations use messages.deleteMessages
+        this.logger.debug('Using Api.messages.deleteMessages for User conversation');
+        result = await client.invoke(
+          new Api.messages.DeleteMessages({
+            id: [messageId],
+            revoke: true
+          })
+        );
+      }
       
       this.logger.info('✅ Message deleted from Telegram via User Client successfully');
       return {

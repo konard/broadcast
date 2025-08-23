@@ -65,15 +65,32 @@ describe('Telegram Integration Tests', () => {
     expect(typeof messageId).toBe('number');
     expect(messageId).toBeGreaterThan(0);
     
-    // Step 3: Delete the message immediately
+    // Step 3: Wait a moment to ensure message is visible
+    console.log('⏳ Waiting 2 seconds before deletion...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Step 4: Delete the message immediately
     console.log('🗑️  Deleting test message...');
     
+    // Create a debug logger temporarily
+    const { Logger } = await import('../logger.mjs');
+    const originalLogger = telegramBroadcaster.logger;
+    telegramBroadcaster.logger = new Logger('debug');
+    
     const deleteResult = await telegramBroadcaster.deleteMessage(messageId, chatEntity);
+    
+    // Restore original logger
+    telegramBroadcaster.logger = originalLogger;
+    
+    console.log(`📋 Delete result:`, deleteResult);
     
     expect(deleteResult.success).toBe(true);
     expect(deleteResult.platform).toBe('telegram');
     console.log(`✅ Message deleted successfully! Message ID: ${messageId}`);
-  }, 15000); // 15 second timeout for API calls
+    
+    // Step 5: Wait and suggest manual verification
+    console.log('💡 Please check your Telegram channel to verify the message was actually deleted.');
+  }, 20000); // 20 second timeout for API calls
 
   test('should handle send errors gracefully', async () => {
     // Create a broadcaster with invalid config to test error handling
