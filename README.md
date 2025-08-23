@@ -1,11 +1,11 @@
 # Broadcast CLI Tool
 
-A powerful CLI tool built with Bun.sh for broadcasting messages to multiple platforms simultaneously. Currently supports Telegram channels and VK walls.
+A powerful CLI tool built with Bun.sh for broadcasting messages to multiple platforms simultaneously. Currently supports Telegram channels, VK walls, and X.com (Twitter).
 
 ## Features
 
 - 🚀 **Fast & Modern**: Built with Bun.sh for lightning-fast execution
-- 📱 **Multi-Platform**: Send to Telegram channels and VK walls
+- 📱 **Multi-Platform**: Send to Telegram channels, VK walls, and X.com
 - 🔧 **Configurable**: Environment-based configuration
 - 🏗️ **Modular Architecture**: Separate broadcaster implementations for easy extensibility
 - 📝 **Flexible**: Support for HTML formatting in Telegram
@@ -22,6 +22,7 @@ The tool follows a modular architecture with complete independence between compo
 - **[`logger.mjs`](logger.mjs)** - Shared logging utility
 - **[`telegram.mjs`](telegram.mjs)** - Telegram broadcaster with TelegramConfig class
 - **[`vk.mjs`](vk.mjs)** - VK broadcaster with VKConfig class
+- **[`x.mjs`](x.mjs)** - X.com broadcaster with XConfig class
 
 Each broadcaster is completely independent and manages its own configuration using the `getenv` package. No shared configuration dependencies exist between platforms.
 
@@ -66,6 +67,41 @@ VK_ACCESS_TOKEN=your_personal_token
 - Token needs `wall` scope for your account
 - Must be a public profile for external posting
 
+## X.com Support
+
+The X.com broadcaster supports multiple authentication methods for maximum flexibility:
+
+### OAuth 2.0 User Authentication (Recommended)
+```bash
+X_CLIENT_ID=your_client_id_here
+X_CLIENT_SECRET=your_client_secret_here
+X_ACCESS_TOKEN=your_access_token_here
+X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
+```
+- **Use case**: Modern user authentication, posting tweets
+- **Capabilities**: Post tweets, delete tweets, full user functionality
+- **Setup**: Create app at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
+
+### OAuth 1.0a User Authentication (Alternative)
+```bash
+X_API_KEY=your_api_key_here
+X_API_KEY_SECRET=your_api_key_secret_here
+X_ACCESS_TOKEN=your_access_token_here
+X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
+```
+- **Use case**: Legacy user authentication, posting tweets
+- **Capabilities**: Post tweets, delete tweets, full user functionality
+- **Setup**: Create app at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
+
+### Bearer Token Authentication (Limited)
+```bash
+X_BEARER_TOKEN=your_bearer_token_here
+```
+- **Use case**: App-only authentication, read-only access
+- **Capabilities**: Read-only operations, cannot post or delete tweets
+- **Setup**: Generate from your Twitter app dashboard
+- **Note**: Not suitable for broadcasting, mainly for testing connectivity
+
 ## Installation
 
 ### Prerequisites
@@ -73,6 +109,7 @@ VK_ACCESS_TOKEN=your_personal_token
 - [Bun.sh](https://bun.sh) installed on your system
 - Telegram Bot Token (create via [@BotFather](https://t.me/botfather))
 - VK Access Token (create at [VK Developers](https://vk.com/dev))
+- X.com API Credentials (create at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard))
 
 ### Setup
 
@@ -102,6 +139,12 @@ VK_ACCESS_TOKEN=your_personal_token
    VK_ACCESS_TOKEN=your_vk_token_here
    VK_OWNER_ID=-123456789
 
+   # X.com Configuration
+   X_CLIENT_ID=your_x_client_id_here
+   X_CLIENT_SECRET=your_x_client_secret_here
+   X_ACCESS_TOKEN=your_x_access_token_here
+   X_ACCESS_TOKEN_SECRET=your_x_access_token_secret_here
+
    # Optional
    LOG_LEVEL=info
    ```
@@ -128,8 +171,11 @@ bun run broadcast.mjs send "Telegram message" --platforms telegram
 # VK only
 bun run broadcast.mjs send "VK message" --platforms vk
 
+# X.com only
+bun run broadcast.mjs send "X.com tweet" --platforms x
+
 # Multiple platforms
-bun run broadcast.mjs send "Multi-platform message" --platforms telegram,vk
+bun run broadcast.mjs send "Multi-platform message" --platforms telegram,vk,x
 ```
 
 **Verbose output:**
@@ -155,7 +201,7 @@ bun run broadcast.mjs send <message> [options]
 - `<message>` - The message to broadcast (required)
 
 **Options:**
-- `-p, --platforms <platforms>` - Comma-separated platforms (telegram,vk,all) [default: all]
+- `-p, --platforms <platforms>` - Comma-separated platforms (telegram,vk,x,all) [default: all]
 - `-v, --verbose` - Enable verbose logging
 - `-h, --help` - Display help
 
@@ -181,6 +227,13 @@ bun run broadcast.mjs test
 | `TELEGRAM_USER_BOT_CHAT_ID` | User Auth | Target chat ID (alternative to username) | `123456789` |
 | `VK_ACCESS_TOKEN` | Yes | VK access token | `abc123def456...` |
 | `VK_OWNER_ID` | Yes | VK owner ID (negative for groups, positive for users) | `-123456789` or `123456789` |
+| `X_CLIENT_ID` | OAuth 2.0 | X.com client ID from developer portal | `your_client_id` |
+| `X_CLIENT_SECRET` | OAuth 2.0 | X.com client secret from developer portal | `your_client_secret` |
+| `X_ACCESS_TOKEN` | User Auth | X.com access token | `your_access_token` |
+| `X_ACCESS_TOKEN_SECRET` | User Auth | X.com access token secret | `your_access_token_secret` |
+| `X_API_KEY` | OAuth 1.0a | X.com API key (alternative to client ID) | `your_api_key` |
+| `X_API_KEY_SECRET` | OAuth 1.0a | X.com API key secret (alternative to client secret) | `your_api_key_secret` |
+| `X_BEARER_TOKEN` | App-only | X.com bearer token (limited functionality) | `your_bearer_token` |
 | `LOG_LEVEL` | No | Logging level | `info` (default) |
 
 ### Getting Credentials
@@ -232,6 +285,44 @@ bun run broadcast.mjs test
    - For personal pages: use positive user ID (e.g., `123456789`)
    - Groups require admin access for wall posting
 
+#### X.com Setup
+
+1. **Create a Twitter Developer Account:**
+   - Go to [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
+   - Apply for a developer account if you don't have one
+   - Create a new project/app
+
+2. **Generate API Credentials:**
+   
+   **For OAuth 2.0 User Authentication (Recommended):**
+   - In your app settings, enable "OAuth 2.0" 
+   - Set redirect URL (can be localhost for CLI usage)
+   - Generate Client ID and Client Secret
+   - Generate Access Token and Access Token Secret with read/write permissions
+   - Configure: `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`
+   
+   **For OAuth 1.0a User Authentication (Alternative):**
+   - In your app settings, enable "OAuth 1.0a"
+   - Generate API Key and API Key Secret
+   - Generate Access Token and Access Token Secret with read/write permissions  
+   - Configure: `X_API_KEY`, `X_API_KEY_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`
+   
+   **For Bearer Token (Limited, Testing Only):**
+   - Generate Bearer Token from app dashboard
+   - Configure: `X_BEARER_TOKEN`
+   - Note: Cannot post or delete tweets, read-only access
+
+3. **Configure Permissions:**
+   - Ensure your app has "Read and Write" permissions
+   - For posting tweets, "Read and Write" is required
+   - Bearer token apps have read-only access by default
+
+4. **Authentication Notes:**
+   - OAuth 2.0 is the modern standard and recommended approach
+   - OAuth 1.0a is legacy but still widely supported
+   - Bearer tokens are useful for read-only operations and testing connectivity
+   - User authentication (OAuth 2.0/1.0a) is required for posting and deleting tweets
+
 ## Examples
 
 ### Simple Broadcasting
@@ -276,6 +367,13 @@ bun run broadcast.mjs send "Test message" --verbose
 - Check if owner ID is correct (negative for groups, positive for users)
 - Ensure you have admin rights for group posting
 
+**"X.com API error" message:**
+- Verify your API credentials are correct and active
+- Check if your app has "Read and Write" permissions
+- Ensure access tokens have the required permissions
+- For Bearer token: Remember it's read-only and cannot post tweets
+- Check if your developer account is in good standing
+
 **"Failed to send" messages:**
 - Check internet connectivity
 - Verify API endpoints are accessible
@@ -303,6 +401,7 @@ broadcast/
 ├── logger.mjs         # Shared logging utility
 ├── telegram.mjs       # Telegram broadcaster (self-configured)
 ├── vk.mjs            # VK broadcaster (self-configured)
+├── x.mjs             # X.com broadcaster (self-configured)
 ├── package.json       # Dependencies and scripts
 ├── .env.example       # Environment template
 ├── .env              # Your configuration (create from .env.example)

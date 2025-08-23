@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import { Logger } from './logger.mjs';
 import TelegramBroadcaster from './telegram.mjs';
 import VKBroadcaster from './vk.mjs';
+import XBroadcaster from './x.mjs';
 
 // Load environment variables
 dotenv.config();
@@ -15,7 +16,8 @@ dotenv.config();
 // Initialize broadcasters
 const broadcasters = [
   new TelegramBroadcaster(),
-  new VKBroadcaster()
+  new VKBroadcaster(),
+  new XBroadcaster()
 ];
 
 // Get broadcaster by name

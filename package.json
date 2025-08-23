@@ -1,7 +1,7 @@
 {
   "name": "broadcast-cli",
   "version": "0.0.1",
-  "description": "CLI tool for broadcasting messages to Telegram channels and VK walls",
+  "description": "CLI tool for broadcasting messages to Telegram channels, VK walls, and X.com",
   "type": "module",
   "main": "broadcast.mjs",
   "bin": {
@@ -11,7 +11,7 @@
     "start": "bun run broadcast.mjs",
     "dev": "bun --watch broadcast.mjs"
   },
-  "keywords": ["cli", "telegram", "vk", "broadcast", "messaging"],
+  "keywords": ["cli", "telegram", "vk", "x.com", "twitter", "broadcast", "messaging"],
   "author": "Your Name",
   "license": "Unlicense",
   "dependencies": {
@@ -19,6 +19,7 @@
     "getenv": "^1.0.0",
     "readline-sync": "^1.4.10",
     "telegram": "^2.26.22",
+    "twitter-api-v2": "^1.25.0",
     "vk-io": "^4.9.0",
     "yargs": "^17.7.2"
   },
