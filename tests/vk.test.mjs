@@ -67,10 +67,18 @@ describe('VK Integration Tests', () => {
     // Clear the VK instance to simulate error
     invalidBroadcaster.vk = null;
     
+    // Temporarily suppress logger to avoid confusing error messages in test output
+    const originalError = invalidBroadcaster.logger.error;
+    invalidBroadcaster.logger.error = () => {}; // Suppress error logging for this test
+    
     const result = await invalidBroadcaster.send('test');
+    
+    // Restore original logger
+    invalidBroadcaster.logger.error = originalError;
     
     expect(result.success).toBe(false);
     expect(result.platform).toBe('vk');
     expect(result.error).toBeTruthy();
+    expect(result.error).toContain('VK instance not initialized');
   });
 });
