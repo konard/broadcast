@@ -72,35 +72,37 @@ VK_ACCESS_TOKEN=your_personal_token
 The X.com broadcaster supports multiple authentication methods with automatic prioritization:
 
 **Authentication Priority Order:**
-1. **OAuth 2.0** (if configured) - highest priority
-2. **OAuth 1.0a** (if configured) - fallback
+1. **Client ID/Secret + Access Tokens** (if configured) - highest priority
+2. **API Key/Secret + Access Tokens** (if configured) - fallback
 3. **Bearer Token** (if configured) - lowest priority
 
-💡 **Note**: If both OAuth 2.0 and OAuth 1.0a credentials are configured, OAuth 2.0 will be used automatically.
+💡 **Note**: Both authentication methods use OAuth 1.0a flow but with different credential types. If both Client ID/Secret and API Key/Secret are configured, Client ID/Secret will be used automatically.
 
-### OAuth 2.0 User Authentication (Modern)
+### OAuth 2.0-Style User Authentication (Modern Credentials)
 ```bash
 X_CLIENT_ID=your_client_id_here
 X_CLIENT_SECRET=your_client_secret_here
 X_ACCESS_TOKEN=your_access_token_here
 X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
 ```
-- **Use case**: Modern authentication with Client ID/Secret credentials
+- **Use case**: Modern Client ID/Secret credentials with OAuth 1.0a authentication flow
 - **Capabilities**: Post tweets, delete tweets, full user functionality
 - **Setup**: Create app at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
-- **Note**: Uses Client ID/Secret instead of API Key/Secret (shown in newer developer portal interfaces)
+- **Note**: Uses Client ID/Secret from newer developer portal, but still requires Access Token/Secret
+- **Important**: Even with Client ID/Secret, X.com still requires Access Token/Secret for user authentication
 
-### OAuth 1.0a User Authentication (Legacy)
+### OAuth 1.0a User Authentication (Legacy Credentials)
 ```bash
 X_API_KEY=your_api_key_here
 X_API_KEY_SECRET=your_api_key_secret_here
 X_ACCESS_TOKEN=your_access_token_here
 X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
 ```
-- **Use case**: Legacy authentication with API Key/Secret credentials
+- **Use case**: Traditional API Key/Secret credentials with OAuth 1.0a authentication
 - **Capabilities**: Post tweets, delete tweets, full user functionality
 - **Setup**: Create app at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
 - **Note**: Traditional API Key/Secret format (still supported by X.com)
+- **Important**: Access Token and Secret are user-specific credentials used to authenticate OAuth 1.0a API requests. They specify the X account the request is made on behalf of.
 
 ### Bearer Token Authentication (Limited)
 ```bash
@@ -140,7 +142,7 @@ X_BEARER_TOKEN=your_bearer_token_here
 
 4. **Edit `.env` file with your credentials**
    
-   **For OAuth 2.0 (if you have Client ID/Secret):**
+   **For Client ID/Secret (modern credentials):**
    ```bash
    # Telegram Configuration
    TELEGRAM_BOT_TOKEN=your_bot_token_here
@@ -150,7 +152,7 @@ X_BEARER_TOKEN=your_bearer_token_here
    VK_ACCESS_TOKEN=your_vk_token_here
    VK_OWNER_ID=-123456789
 
-   # X.com Configuration (OAuth 2.0)
+   # X.com Configuration (Client ID/Secret)
    X_CLIENT_ID=your_x_client_id_here
    X_CLIENT_SECRET=your_x_client_secret_here
    X_ACCESS_TOKEN=your_x_access_token_here
@@ -167,6 +169,12 @@ X_BEARER_TOKEN=your_bearer_token_here
    X_API_KEY_SECRET=your_x_api_key_secret_here
    X_ACCESS_TOKEN=your_x_access_token_here
    X_ACCESS_TOKEN_SECRET=your_x_access_token_secret_here
+   ```
+   
+   **For Bearer Token (read-only testing):**
+   ```bash
+   # X.com Configuration (Bearer Token - read-only)
+   X_BEARER_TOKEN=your_x_bearer_token_here
    ```
 
 5. **Make the script executable (optional)**
@@ -249,12 +257,12 @@ bun run broadcast.mjs test
 | `TELEGRAM_USER_BOT_CHAT_ID` | User Auth | Target chat ID (alternative to username) | `123456789` |
 | `VK_ACCESS_TOKEN` | Yes | VK access token | `abc123def456...` |
 | `VK_OWNER_ID` | Yes | VK owner ID (negative for groups, positive for users) | `-123456789` or `123456789` |
-| `X_CLIENT_ID` | OAuth 2.0 | X.com Client ID from developer portal | `your_client_id` |
-| `X_CLIENT_SECRET` | OAuth 2.0 | X.com Client Secret from developer portal | `your_client_secret` |
-| `X_API_KEY` | OAuth 1.0a | X.com API key from developer portal | `your_api_key` |
-| `X_API_KEY_SECRET` | OAuth 1.0a | X.com API key secret from developer portal | `your_api_key_secret` |
-| `X_ACCESS_TOKEN` | User Auth | X.com access token (used by both OAuth methods) | `your_access_token` |
-| `X_ACCESS_TOKEN_SECRET` | User Auth | X.com access token secret (used by both OAuth methods) | `your_access_token_secret` |
+| `X_CLIENT_ID` | Client ID/Secret | X.com Client ID from developer portal | `your_client_id` |
+| `X_CLIENT_SECRET` | Client ID/Secret | X.com Client Secret from developer portal | `your_client_secret` |
+| `X_API_KEY` | API Key/Secret | X.com API key from developer portal | `your_api_key` |
+| `X_API_KEY_SECRET` | API Key/Secret | X.com API key secret from developer portal | `your_api_key_secret` |
+| `X_ACCESS_TOKEN` | Both methods | X.com access token (required for user authentication) | `your_access_token` |
+| `X_ACCESS_TOKEN_SECRET` | Both methods | X.com access token secret (required for user authentication) | `your_access_token_secret` |
 | `X_BEARER_TOKEN` | App-only | X.com bearer token (limited functionality) | `your_bearer_token` |
 | `LOG_LEVEL` | No | Logging level | `info` (default) |
 
@@ -387,17 +395,22 @@ bun run broadcast.mjs test
    
    **If you see "Client ID" and "Client Secret" (OAuth 2.0):**
    - `Client ID` → `X_CLIENT_ID`
-   - `Client Secret` → `X_CLIENT_SECRET`  
-   - `Access Token` → `X_ACCESS_TOKEN`
-   - `Access Token Secret` → `X_ACCESS_TOKEN_SECRET`
+   - `Client Secret` → `X_CLIENT_SECRET`
+   - **Note**: OAuth 2.0 does not use Access Token/Secret pairs for CLI apps
    
    **If you see "API Key" and "API Key Secret" (OAuth 1.0a):**
    - `API Key` → `X_API_KEY`
    - `API Key Secret` → `X_API_KEY_SECRET`  
-   - `Access Token` → `X_ACCESS_TOKEN`
-   - `Access Token Secret` → `X_ACCESS_TOKEN_SECRET`
+   - `Access Token` → `X_ACCESS_TOKEN` (OAuth 1.0a user-specific credential)
+   - `Access Token Secret` → `X_ACCESS_TOKEN_SECRET` (OAuth 1.0a user-specific credential)
    
-   **💡 Note**: Both authentication methods work identically for posting and deleting tweets. Use whichever credentials your developer portal provides.
+   **For Bearer Token (app-only, read-only):**
+   - `Bearer Token` → `X_BEARER_TOKEN`
+   - **Note**: Bearer tokens are generated in the same "Keys and tokens" tab
+   - **Limitation**: Can only test connectivity, cannot post or delete tweets
+   - **Use case**: Testing API connection without posting permissions
+   
+   **💡 Note**: All authentication methods work for their respective capabilities. Bearer tokens are useful for testing but cannot post tweets.
 
 5. **Verify Setup:**
    ```bash
@@ -447,9 +460,8 @@ bun run broadcast.mjs send "<b>Bold text</b> and <i>italic text</i>" -p telegram
 **For OAuth 2.0 (modern - Client ID/Secret):**
 ```bash
 X_CLIENT_ID=your_client_id_here
-X_CLIENT_SECRET=your_client_secret_here  
-X_ACCESS_TOKEN=your_access_token_here
-X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
+X_CLIENT_SECRET=your_client_secret_here
+# OAuth 2.0 uses different auth flow - no Access Token/Secret needed
 ```
 
 **For OAuth 1.0a (legacy - API Key/Secret):**
@@ -458,6 +470,11 @@ X_API_KEY=your_api_key_here
 X_API_KEY_SECRET=your_api_key_secret_here  
 X_ACCESS_TOKEN=your_access_token_here
 X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
+```
+
+**For Bearer Token (read-only testing):**
+```bash
+X_BEARER_TOKEN=your_bearer_token_here
 ```
 ✅ **Test connection**: `bun run broadcast.mjs test`
 
