@@ -12,7 +12,6 @@ class VKConfig {
   constructor() {
     this.accessToken = getenv('VK_ACCESS_TOKEN', '');
     this.ownerId = getenv('VK_OWNER_ID', '');
-    this.apiVersion = getenv('VK_API_VERSION', '5.131');
     this.logLevel = getenv('LOG_LEVEL', 'info');
   }
 
@@ -81,8 +80,7 @@ export class VKBroadcaster {
       const params = new URLSearchParams({
         owner_id: this.config.ownerId,
         message: message,
-        access_token: this.config.accessToken,
-        v: this.config.apiVersion
+        access_token: this.config.accessToken
       });
 
       const response = await fetch(`${this.baseUrl}/wall.post`, {

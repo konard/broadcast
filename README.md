@@ -76,7 +76,6 @@ VK_ACCESS_TOKEN=your_personal_token
    # VK Configuration  
    VK_ACCESS_TOKEN=your_vk_token_here
    VK_OWNER_ID=-123456789
-   VK_API_VERSION=5.131
 
    # Optional
    LOG_LEVEL=info
@@ -152,7 +151,6 @@ bun run broadcast.mjs test
 | `TELEGRAM_CHANNEL_ID` | Yes | Channel username or ID | `@mychannel` or `-1001234567890` |
 | `VK_ACCESS_TOKEN` | Yes | VK access token | `abc123def456...` |
 | `VK_OWNER_ID` | Yes | VK owner ID (negative for groups, positive for users) | `-123456789` or `123456789` |
-| `VK_API_VERSION` | No | VK API version | `5.131` (default) |
 | `LOG_LEVEL` | No | Logging level | `info` (default) |
 
 ### Getting Credentials
@@ -180,6 +178,7 @@ bun run broadcast.mjs test
    - Use VK's OAuth or generate token with needed permissions
    - Required permissions: `wall` for posting to walls
    - For group walls, you need admin access to the group
+   - The tool automatically uses the latest VK API version
 
 3. **Get Owner ID:**
    - For groups: use negative group ID (e.g., `-123456789`)
