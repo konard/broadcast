@@ -11,9 +11,15 @@ dotenv.config();
  */
 class XConfig {
   constructor() {
-    // OAuth 1.0a User Context (primary method - matches X.com developer portal)
+    // OAuth 2.0 User Context (modern authentication)
+    this.clientId = getenv('X_CLIENT_ID', '');
+    this.clientSecret = getenv('X_CLIENT_SECRET', '');
+    
+    // OAuth 1.0a User Context (legacy authentication)
     this.apiKey = getenv('X_API_KEY', '');
     this.apiKeySecret = getenv('X_API_KEY_SECRET', '');
+    
+    // Access tokens (used by both OAuth 2.0 and 1.0a)
     this.accessToken = getenv('X_ACCESS_TOKEN', '');
     this.accessTokenSecret = getenv('X_ACCESS_TOKEN_SECRET', '');
     
@@ -24,10 +30,24 @@ class XConfig {
   }
 
   /**
+   * Check if OAuth 2.0 user authentication is configured
+   */
+  get hasOAuth2UserAuth() {
+    return !!(this.clientId && this.clientSecret && this.accessToken && this.accessTokenSecret);
+  }
+
+  /**
    * Check if OAuth 1.0a user authentication is configured
    */
-  get hasUserAuth() {
+  get hasOAuth1UserAuth() {
     return !!(this.apiKey && this.apiKeySecret && this.accessToken && this.accessTokenSecret);
+  }
+
+  /**
+   * Check if any user authentication is configured
+   */
+  get hasUserAuth() {
+    return this.hasOAuth2UserAuth || this.hasOAuth1UserAuth;
   }
 
   /**
@@ -45,14 +65,19 @@ class XConfig {
     const errors = [];
     
     if (!this.hasUserAuth && !this.hasBearerAuth) {
-      errors.push('At least one authentication method is required: User auth (X_API_KEY + X_API_KEY_SECRET + X_ACCESS_TOKEN + X_ACCESS_TOKEN_SECRET) or Bearer token (X_BEARER_TOKEN)');
+      errors.push('At least one authentication method is required: OAuth 2.0 (X_CLIENT_ID + X_CLIENT_SECRET + tokens), OAuth 1.0a (X_API_KEY + X_API_KEY_SECRET + tokens), or Bearer token (X_BEARER_TOKEN)');
     }
     
-    if (this.hasUserAuth) {
-      if (!this.apiKey) errors.push('X_API_KEY is required for user auth');
-      if (!this.apiKeySecret) errors.push('X_API_KEY_SECRET is required for user auth');
-      if (!this.accessToken) errors.push('X_ACCESS_TOKEN is required for user auth');
-      if (!this.accessTokenSecret) errors.push('X_ACCESS_TOKEN_SECRET is required for user auth');
+    if (this.hasOAuth2UserAuth) {
+      if (!this.clientId) errors.push('X_CLIENT_ID is required for OAuth 2.0 user auth');
+      if (!this.clientSecret) errors.push('X_CLIENT_SECRET is required for OAuth 2.0 user auth');
+      if (!this.accessToken) errors.push('X_ACCESS_TOKEN is required for OAuth 2.0 user auth');
+      if (!this.accessTokenSecret) errors.push('X_ACCESS_TOKEN_SECRET is required for OAuth 2.0 user auth');
+    } else if (this.hasOAuth1UserAuth) {
+      if (!this.apiKey) errors.push('X_API_KEY is required for OAuth 1.0a user auth');
+      if (!this.apiKeySecret) errors.push('X_API_KEY_SECRET is required for OAuth 1.0a user auth');
+      if (!this.accessToken) errors.push('X_ACCESS_TOKEN is required for OAuth 1.0a user auth');
+      if (!this.accessTokenSecret) errors.push('X_ACCESS_TOKEN_SECRET is required for OAuth 1.0a user auth');
     }
     
     return { errors };
@@ -86,11 +111,33 @@ export class XBroadcaster {
 
   /**
    * Initialize Twitter API client based on available authentication
+   * Priority order: OAuth 2.0 > OAuth 1.0a > Bearer Token
    */
   initializeClient() {
     try {
-      if (this.config.hasUserAuth) {
-        // OAuth 1.0a User Context (standard X.com API authentication)
+      // Priority 1: OAuth 2.0 User Context (preferred when available)
+      if (this.config.hasOAuth2UserAuth) {
+        // OAuth 2.0 User Context (modern authentication with Client ID/Secret)
+        // Note: For CLI usage with existing access tokens, we use the OAuth 1.0a-style constructor
+        // but with OAuth 2.0 credentials (Client ID/Secret instead of API Key/Secret)
+        this.client = new TwitterApi({
+          appKey: this.config.clientId,
+          appSecret: this.config.clientSecret,
+          accessToken: this.config.accessToken,
+          accessSecret: this.config.accessTokenSecret,
+        });
+        
+        this.authMethod = 'OAuth 2.0 User';
+        this.logger.debug('X.com client initialized with OAuth 2.0 user authentication (Client ID/Secret)');
+        
+        // Log if OAuth 1.0a is also available but not used
+        if (this.config.hasOAuth1UserAuth) {
+          this.logger.debug('OAuth 1.0a credentials also detected but OAuth 2.0 takes priority');
+        }
+        
+      // Priority 2: OAuth 1.0a User Context (fallback)
+      } else if (this.config.hasOAuth1UserAuth) {
+        // OAuth 1.0a User Context (legacy authentication with API Key/Secret)
         this.client = new TwitterApi({
           appKey: this.config.apiKey,
           appSecret: this.config.apiKeySecret,
@@ -101,6 +148,7 @@ export class XBroadcaster {
         this.authMethod = 'OAuth 1.0a User';
         this.logger.debug('X.com client initialized with OAuth 1.0a user authentication');
         
+      // Priority 3: Bearer Token (app-only, limited functionality)
       } else if (this.config.hasBearerAuth) {
         // Bearer Token (app-only, limited functionality)
         this.client = new TwitterApi(this.config.bearerToken);
