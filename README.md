@@ -12,6 +12,8 @@ A powerful CLI tool built with Bun.sh for broadcasting messages to multiple plat
 - 🧪 **Testing**: Built-in connectivity testing
 - 🔍 **Logging**: Configurable logging levels
 - ⚡ **CLI-Friendly**: Easy to use command-line interface with yargs
+- 🤖 **Dual Telegram Auth**: Supports both Bot API and User Client authentication
+- 🔐 **Session Management**: Automatic session persistence for user authentication
 
 ## Architecture
 
@@ -22,6 +24,25 @@ The tool follows a modular architecture with complete independence between compo
 - **[`vk.mjs`](vk.mjs)** - VK broadcaster with VKConfig class
 
 Each broadcaster is completely independent and manages its own configuration using the `getenv` package. No shared configuration dependencies exist between platforms.
+
+## Telegram Authentication
+
+The Telegram broadcaster supports two authentication methods:
+
+### Bot API Authentication (Recommended)
+- **Use case**: Official channels, groups, automated posting
+- **Setup**: Create bot via [@BotFather](https://t.me/botfather)
+- **Requirements**: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHANNEL_ID`
+- **Permissions**: Bot must be admin in target channel
+
+### User Client Authentication (Advanced)
+- **Use case**: Personal messaging, advanced Telegram features
+- **Setup**: Create app at [my.telegram.org/apps](https://my.telegram.org/apps)
+- **Requirements**: `TELEGRAM_USER_BOT_*` variables
+- **Session**: Automatically managed with `.telegram_session` file
+- **Interactive**: May prompt for phone verification on first run
+
+The broadcaster automatically chooses the available method, preferring Bot API when both are configured.
 
 ## VK Support
 
@@ -151,8 +172,13 @@ bun run broadcast.mjs test
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|----------|
-| `TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token from @BotFather | `123456:ABC-DEF...` |
-| `TELEGRAM_CHANNEL_ID` | Yes | Channel username or ID | `@mychannel` or `-1001234567890` |
+| `TELEGRAM_BOT_TOKEN` | Bot Auth | Telegram bot token from @BotFather | `123456:ABC-DEF...` |
+| `TELEGRAM_CHANNEL_ID` | Bot Auth | Channel username or ID | `@mychannel` or `-1001234567890` |
+| `TELEGRAM_USER_BOT_API_ID` | User Auth | API ID from my.telegram.org/apps | `1234567` |
+| `TELEGRAM_USER_BOT_API_HASH` | User Auth | API Hash from my.telegram.org/apps | `abc123def456...` |
+| `TELEGRAM_USER_BOT_PHONE` | User Auth | Your phone number | `+1234567890` |
+| `TELEGRAM_USER_BOT_CHAT_USERNAME` | User Auth | Target chat username | `@targetuser` |
+| `TELEGRAM_USER_BOT_CHAT_ID` | User Auth | Target chat ID (alternative to username) | `123456789` |
 | `VK_ACCESS_TOKEN` | Yes | VK access token | `abc123def456...` |
 | `VK_OWNER_ID` | Yes | VK owner ID (negative for groups, positive for users) | `-123456789` or `123456789` |
 | `LOG_LEVEL` | No | Logging level | `info` (default) |
@@ -161,6 +187,7 @@ bun run broadcast.mjs test
 
 #### Telegram Setup
 
+**Bot Authentication (Recommended):**
 1. **Create a bot:**
    - Message [@BotFather](https://t.me/botfather) on Telegram
    - Send `/newbot` and follow instructions
@@ -170,6 +197,22 @@ bun run broadcast.mjs test
    - Add your bot to the target channel
    - Make it an admin with "Post Messages" permission
    - Get channel ID (use @userinfobot or check channel info)
+
+**User Authentication (Advanced):**
+1. **Create a Telegram application:**
+   - Go to [my.telegram.org/apps](https://my.telegram.org/apps)
+   - Create new application
+   - Note the API ID and API Hash
+
+2. **Configure user authentication:**
+   - Set `TELEGRAM_USER_BOT_API_ID` and `TELEGRAM_USER_BOT_API_HASH`
+   - Set `TELEGRAM_USER_BOT_PHONE` (your phone number)
+   - Set target chat via `TELEGRAM_USER_BOT_CHAT_USERNAME` or `TELEGRAM_USER_BOT_CHAT_ID`
+
+3. **First run setup:**
+   - On first run, you'll be prompted for verification code
+   - Session will be saved to `.telegram_session` file
+   - Subsequent runs won't require re-authentication
 
 #### VK Setup
 
