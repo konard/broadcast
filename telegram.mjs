@@ -1,5 +1,9 @@
-import { Config } from './config.mjs';
+import getenv from 'getenv';
+import * as dotenv from 'dotenv';
 import { Logger } from './logger.mjs';
+
+// Load environment variables
+dotenv.config();
 
 /**
  * Telegram broadcaster implementation
@@ -8,12 +12,17 @@ export class TelegramBroadcaster {
   constructor() {
     this.name = 'telegram';
     this.displayName = 'Telegram';
-    this.config = new Config();
-    this.logger = new Logger(this.config.logLevel);
+    
+    // Initialize Telegram-specific configuration using getenv
+    this.botToken = getenv('TELEGRAM_BOT_TOKEN', '');
+    this.channelId = getenv('TELEGRAM_CHANNEL_ID', '');
+    this.logLevel = getenv('LOG_LEVEL', 'info');
+    
+    this.logger = new Logger(this.logLevel);
     this.baseUrl = null;
     
-    if (this.config.telegram.botToken) {
-      this.baseUrl = `https://api.telegram.org/bot${this.config.telegram.botToken}`;
+    if (this.botToken) {
+      this.baseUrl = `https://api.telegram.org/bot${this.botToken}`;
     }
   }
 
@@ -21,7 +30,7 @@ export class TelegramBroadcaster {
    * Check if this broadcaster is properly configured
    */
   isConfigured() {
-    const errors = this.config.validateTelegram();
+    const errors = this.getConfigurationErrors();
     return errors.length === 0;
   }
 
@@ -29,7 +38,17 @@ export class TelegramBroadcaster {
    * Get configuration errors
    */
   getConfigurationErrors() {
-    return this.config.validateTelegram();
+    const errors = [];
+    
+    if (!this.botToken) {
+      errors.push('TELEGRAM_BOT_TOKEN is required');
+    }
+    
+    if (!this.channelId) {
+      errors.push('TELEGRAM_CHANNEL_ID is required');
+    }
+    
+    return errors;
   }
 
   /**
@@ -37,7 +56,7 @@ export class TelegramBroadcaster {
    */
   async send(message) {
     try {
-      this.logger.debug(`Sending message to Telegram channel: ${this.config.telegram.channelId}`);
+      this.logger.debug(`Sending message to Telegram channel: ${this.channelId}`);
       
       if (!this.baseUrl) {
         throw new Error('Telegram bot token not configured');
@@ -49,7 +68,7 @@ export class TelegramBroadcaster {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          chat_id: this.config.telegram.channelId,
+          chat_id: this.channelId,
           text: message,
           parse_mode: 'HTML'
         })

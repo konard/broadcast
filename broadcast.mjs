@@ -2,10 +2,15 @@
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { Config } from './config.mjs';
+import getenv from 'getenv';
+import * as dotenv from 'dotenv';
+import { existsSync } from 'fs';
 import { Logger } from './logger.mjs';
 import TelegramBroadcaster from './telegram.mjs';
 import VKBroadcaster from './vk.mjs';
+
+// Load environment variables
+dotenv.config();
 
 // Initialize broadcasters
 const broadcasters = [
@@ -25,8 +30,8 @@ function getBroadcasterNames() {
 
 // Main broadcast function
 async function broadcast(message, platforms) {
-  const config = new Config();
-  const logger = new Logger(config.logLevel);
+  const logLevel = getenv('LOG_LEVEL', 'info');
+  const logger = new Logger(logLevel);
   const results = [];
   
   // Determine which broadcasters to use
@@ -74,13 +79,12 @@ async function broadcast(message, platforms) {
 
 // Test function
 async function testBroadcasters() {
-  const config = new Config();
   const logger = new Logger('debug');
   
   console.log('🔧 Testing configuration...\n');
   
   // Check if .env file exists
-  if (config.hasEnvFile()) {
+  if (existsSync('.env')) {
     console.log('✅ .env file found');
   } else {
     console.log('⚠️  .env file not found, using environment variables');

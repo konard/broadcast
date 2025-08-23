@@ -17,12 +17,11 @@ A powerful CLI tool built with Bun.sh for broadcasting messages to multiple plat
 
 The tool follows a modular architecture:
 - **[`broadcast.mjs`](broadcast.mjs)** - Main CLI entry point using yargs
-- **[`config.mjs`](config.mjs)** - Shared configuration management
 - **[`logger.mjs`](logger.mjs)** - Shared logging utility
-- **[`telegram.mjs`](telegram.mjs)** - Telegram broadcaster implementation
-- **[`vk.mjs`](vk.mjs)** - VK broadcaster implementation
+- **[`telegram.mjs`](telegram.mjs)** - Telegram broadcaster implementation with its own config
+- **[`vk.mjs`](vk.mjs)** - VK broadcaster implementation with its own config
 
-Each broadcaster is responsible only for its own platform and shares the same configuration.
+Each broadcaster is completely independent and manages its own configuration using the `getenv` package to read environment variables.
 
 ## Installation
 
@@ -232,10 +231,9 @@ bun run broadcast.mjs test
 ```
 broadcast/
 ├── broadcast.mjs      # Main CLI script (yargs-based)
-├── config.mjs         # Shared configuration utility
 ├── logger.mjs         # Shared logging utility
-├── telegram.mjs       # Telegram broadcaster
-├── vk.mjs            # VK broadcaster
+├── telegram.mjs       # Telegram broadcaster (self-configured)
+├── vk.mjs            # VK broadcaster (self-configured)
 ├── package.json       # Dependencies and scripts
 ├── .env.example       # Environment template
 ├── .env              # Your configuration (create from .env.example)

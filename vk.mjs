@@ -1,5 +1,9 @@
-import { Config } from './config.mjs';
+import getenv from 'getenv';
+import * as dotenv from 'dotenv';
 import { Logger } from './logger.mjs';
+
+// Load environment variables
+dotenv.config();
 
 /**
  * VK broadcaster implementation
@@ -8,16 +12,22 @@ export class VKBroadcaster {
   constructor() {
     this.name = 'vk';
     this.displayName = 'VK';
-    this.config = new Config();
-    this.logger = new Logger(this.config.logLevel);
     this.baseUrl = 'https://api.vk.com/method';
+    
+    // Initialize VK-specific configuration using getenv
+    this.accessToken = getenv('VK_ACCESS_TOKEN', '');
+    this.groupId = getenv('VK_GROUP_ID', '');
+    this.apiVersion = getenv('VK_API_VERSION', '5.131');
+    this.logLevel = getenv('LOG_LEVEL', 'info');
+    
+    this.logger = new Logger(this.logLevel);
   }
 
   /**
    * Check if this broadcaster is properly configured
    */
   isConfigured() {
-    const errors = this.config.validateVK();
+    const errors = this.getConfigurationErrors();
     return errors.length === 0;
   }
 
@@ -25,7 +35,17 @@ export class VKBroadcaster {
    * Get configuration errors
    */
   getConfigurationErrors() {
-    return this.config.validateVK();
+    const errors = [];
+    
+    if (!this.accessToken) {
+      errors.push('VK_ACCESS_TOKEN is required');
+    }
+    
+    if (!this.groupId) {
+      errors.push('VK_GROUP_ID is required');
+    }
+    
+    return errors;
   }
 
   /**
@@ -33,13 +53,13 @@ export class VKBroadcaster {
    */
   async send(message) {
     try {
-      this.logger.debug(`Posting message to VK wall: ${this.config.vk.groupId}`);
+      this.logger.debug(`Posting message to VK wall: ${this.groupId}`);
       
       const params = new URLSearchParams({
-        owner_id: this.config.vk.groupId,
+        owner_id: this.groupId,
         message: message,
-        access_token: this.config.vk.accessToken,
-        v: this.config.vk.apiVersion
+        access_token: this.accessToken,
+        v: this.apiVersion
       });
 
       const response = await fetch(`${this.baseUrl}/wall.post`, {
