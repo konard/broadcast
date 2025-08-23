@@ -6,38 +6,20 @@ import { Logger } from './logger.mjs';
 dotenv.config();
 
 /**
- * Telegram broadcaster implementation
+ * Telegram configuration class
  */
-export class TelegramBroadcaster {
+class TelegramConfig {
   constructor() {
-    this.name = 'telegram';
-    this.displayName = 'Telegram';
-    
-    // Initialize Telegram-specific configuration using getenv
     this.botToken = getenv('TELEGRAM_BOT_TOKEN', '');
     this.channelId = getenv('TELEGRAM_CHANNEL_ID', '');
     this.logLevel = getenv('LOG_LEVEL', 'info');
-    
-    this.logger = new Logger(this.logLevel);
-    this.baseUrl = null;
-    
-    if (this.botToken) {
-      this.baseUrl = `https://api.telegram.org/bot${this.botToken}`;
-    }
   }
 
   /**
-   * Check if this broadcaster is properly configured
+   * Validate Telegram configuration
+   * @returns {object} Object with errors array
    */
-  isConfigured() {
-    const errors = this.getConfigurationErrors();
-    return errors.length === 0;
-  }
-
-  /**
-   * Get configuration errors
-   */
-  getConfigurationErrors() {
+  validate() {
     const errors = [];
     
     if (!this.botToken) {
@@ -48,7 +30,48 @@ export class TelegramBroadcaster {
       errors.push('TELEGRAM_CHANNEL_ID is required');
     }
     
-    return errors;
+    return { errors };
+  }
+
+  /**
+   * Check if configuration is valid
+   * @returns {boolean}
+   */
+  get isValid() {
+    return this.validate().errors.length === 0;
+  }
+}
+
+/**
+ * Telegram broadcaster implementation
+ */
+export class TelegramBroadcaster {
+  constructor() {
+    this.name = 'telegram';
+    this.displayName = 'Telegram';
+    
+    // Initialize Telegram-specific configuration
+    this.config = new TelegramConfig();
+    this.logger = new Logger(this.config.logLevel);
+    this.baseUrl = null;
+    
+    if (this.config.botToken) {
+      this.baseUrl = `https://api.telegram.org/bot${this.config.botToken}`;
+    }
+  }
+
+  /**
+   * Check if this broadcaster is properly configured
+   */
+  isConfigured() {
+    return this.config.isValid;
+  }
+
+  /**
+   * Get configuration errors
+   */
+  getConfigurationErrors() {
+    return this.config.validate().errors;
   }
 
   /**
@@ -56,7 +79,7 @@ export class TelegramBroadcaster {
    */
   async send(message) {
     try {
-      this.logger.debug(`Sending message to Telegram channel: ${this.channelId}`);
+      this.logger.debug(`Sending message to Telegram channel: ${this.config.channelId}`);
       
       if (!this.baseUrl) {
         throw new Error('Telegram bot token not configured');
@@ -68,7 +91,7 @@ export class TelegramBroadcaster {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          chat_id: this.channelId,
+          chat_id: this.config.channelId,
           text: message,
           parse_mode: 'HTML'
         })

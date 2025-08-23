@@ -6,35 +6,21 @@ import { Logger } from './logger.mjs';
 dotenv.config();
 
 /**
- * VK broadcaster implementation
+ * VK configuration class
  */
-export class VKBroadcaster {
+class VKConfig {
   constructor() {
-    this.name = 'vk';
-    this.displayName = 'VK';
-    this.baseUrl = 'https://api.vk.com/method';
-    
-    // Initialize VK-specific configuration using getenv
     this.accessToken = getenv('VK_ACCESS_TOKEN', '');
     this.groupId = getenv('VK_GROUP_ID', '');
     this.apiVersion = getenv('VK_API_VERSION', '5.131');
     this.logLevel = getenv('LOG_LEVEL', 'info');
-    
-    this.logger = new Logger(this.logLevel);
   }
 
   /**
-   * Check if this broadcaster is properly configured
+   * Validate VK configuration
+   * @returns {object} Object with errors array
    */
-  isConfigured() {
-    const errors = this.getConfigurationErrors();
-    return errors.length === 0;
-  }
-
-  /**
-   * Get configuration errors
-   */
-  getConfigurationErrors() {
+  validate() {
     const errors = [];
     
     if (!this.accessToken) {
@@ -45,7 +31,44 @@ export class VKBroadcaster {
       errors.push('VK_GROUP_ID is required');
     }
     
-    return errors;
+    return { errors };
+  }
+
+  /**
+   * Check if configuration is valid
+   * @returns {boolean}
+   */
+  get isValid() {
+    return this.validate().errors.length === 0;
+  }
+}
+
+/**
+ * VK broadcaster implementation
+ */
+export class VKBroadcaster {
+  constructor() {
+    this.name = 'vk';
+    this.displayName = 'VK';
+    this.baseUrl = 'https://api.vk.com/method';
+    
+    // Initialize VK-specific configuration
+    this.config = new VKConfig();
+    this.logger = new Logger(this.config.logLevel);
+  }
+
+  /**
+   * Check if this broadcaster is properly configured
+   */
+  isConfigured() {
+    return this.config.isValid;
+  }
+
+  /**
+   * Get configuration errors
+   */
+  getConfigurationErrors() {
+    return this.config.validate().errors;
   }
 
   /**
@@ -53,13 +76,13 @@ export class VKBroadcaster {
    */
   async send(message) {
     try {
-      this.logger.debug(`Posting message to VK wall: ${this.groupId}`);
+      this.logger.debug(`Posting message to VK wall: ${this.config.groupId}`);
       
       const params = new URLSearchParams({
-        owner_id: this.groupId,
+        owner_id: this.config.groupId,
         message: message,
-        access_token: this.accessToken,
-        v: this.apiVersion
+        access_token: this.config.accessToken,
+        v: this.config.apiVersion
       });
 
       const response = await fetch(`${this.baseUrl}/wall.post`, {
