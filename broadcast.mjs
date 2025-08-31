@@ -128,84 +128,89 @@ async function testBroadcasters() {
 }
 
 // CLI setup with yargs
-yargs(hideBin(process.argv))
+const argv = yargs(hideBin(process.argv))
   .scriptName('broadcast')
-  .usage('$0 <cmd> [args]')
+  .usage('$0 <message> [options]')
   .version('0.0.1')
-  .command(
-    'send <message>',
-    'Send a message to specified platforms',
-    (yargs) => {
-      yargs
-        .positional('message', {
-          describe: 'Message to broadcast',
-          type: 'string'
-        })
-        .option('platforms', {
-          alias: 'p',
-          describe: 'Comma-separated list of platforms',
-          type: 'string',
-          default: 'all',
-          choices: [...getBroadcasterNames(), 'all']
-        })
-        .option('verbose', {
-          alias: 'v',
-          describe: 'Verbose output',
-          type: 'boolean',
-          default: false
-        });
-    },
-    async (argv) => {
-      if (argv.verbose) {
-        process.env.LOG_LEVEL = 'debug';
-      }
-      
-      const platforms = argv.platforms.split(',').map(p => p.trim().toLowerCase());
-      const validPlatforms = [...getBroadcasterNames(), 'all'];
-      
-      // Validate platforms
-      const invalidPlatforms = platforms.filter(p => !validPlatforms.includes(p));
-      if (invalidPlatforms.length > 0) {
-        console.error(`❌ Invalid platforms: ${invalidPlatforms.join(', ')}`);
-        console.error(`Valid platforms: ${validPlatforms.join(', ')}`);
-        process.exit(1);
-      }
-      
-      try {
-        console.log(`🚀 Broadcasting message to: ${platforms.join(', ')}`);
-        console.log(`📝 Message: ${argv.message}`);
-        console.log('');
-        
-        const results = await broadcast(argv.message, platforms);
-        
-        console.log('\n📊 Results:');
-        results.forEach(({ platform, success, error }) => {
-          if (success) {
-            console.log(`✅ ${platform.toUpperCase()}: Success`);
-          } else {
-            console.log(`❌ ${platform.toUpperCase()}: Failed - ${error}`);
-          }
-        });
-        
-        const failedCount = results.filter(r => !r.success).length;
-        if (failedCount > 0) {
-          process.exit(1);
-        }
-        
-      } catch (error) {
-        console.error('❌ Broadcast failed:', error.message);
-        process.exit(1);
-      }
-    }
-  )
-  .command(
-    'test',
-    'Test configuration and connectivity',
-    () => {},
-    async () => {
-      await testBroadcasters();
-    }
-  )
-  .demandCommand(1, 'You need at least one command before moving on')
+  .positional('message', {
+    describe: 'Message to broadcast',
+    type: 'string'
+  })
+  .option('platforms', {
+    alias: 'p',
+    describe: 'Comma-separated list of platforms',
+    type: 'string',
+    default: 'all',
+    choices: [...getBroadcasterNames(), 'all']
+  })
+  .option('test', {
+    alias: 't',
+    describe: 'Test mode (do not send, just log)',
+    type: 'boolean',
+    default: false
+  })
+  .option('verbose', {
+    alias: 'v',
+    describe: 'Verbose output',
+    type: 'boolean',
+    default: false
+  })
+  .demandCommand(0)
   .help()
   .argv;
+
+(async () => {
+  if (argv.verbose) {
+    process.env.LOG_LEVEL = 'debug';
+  }
+
+  const message = argv.message || argv._[0];
+  if (!message) {
+    console.error('❌ Message is required');
+    process.exit(1);
+  }
+
+  const platforms = argv.platforms.split(',').map(p => p.trim().toLowerCase());
+  const validPlatforms = [...getBroadcasterNames(), 'all'];
+
+  // Validate platforms
+  const invalidPlatforms = platforms.filter(p => !validPlatforms.includes(p));
+  if (invalidPlatforms.length > 0) {
+    console.error(`❌ Invalid platforms: ${invalidPlatforms.join(', ')}`);
+    console.error(`Valid platforms: ${validPlatforms.join(', ')}`);
+    process.exit(1);
+  }
+
+  if (argv.test) {
+    console.log(`🧪 Test mode: Broadcasting message to: ${platforms.join(', ')}`);
+    console.log(`📝 Message: ${message}`);
+    console.log('✅ Test completed (no actual send)');
+    return;
+  }
+
+  try {
+    console.log(`🚀 Broadcasting message to: ${platforms.join(', ')}`);
+    console.log(`📝 Message: ${message}`);
+    console.log('');
+
+    const results = await broadcast(message, platforms);
+
+    console.log('\n📊 Results:');
+    results.forEach(({ platform, success, error }) => {
+      if (success) {
+        console.log(`✅ ${platform.toUpperCase()}: Success`);
+      } else {
+        console.log(`❌ ${platform.toUpperCase()}: Failed - ${error}`);
+      }
+    });
+
+    const failedCount = results.filter(r => !r.success).length;
+    if (failedCount > 0) {
+      process.exit(1);
+    }
+
+  } catch (error) {
+    console.error('❌ Broadcast failed:', error.message);
+    process.exit(1);
+  }
+})();
