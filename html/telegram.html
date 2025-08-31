@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Broadcast POC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            margin-bottom: 30px;
+            color: #333;
+            text-align: center;
+        }
+        .input-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        input[type="text"], 
+        input[type="password"], 
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input:focus, 
+        textarea:focus {
+            outline: none;
+            border-color: #0088cc;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .checkbox-group label {
+            margin-bottom: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+        .actions {
+            margin-top: 30px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #0088cc;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+            flex: 1;
+            min-width: 150px;
+        }
+        button:hover {
+            background: #006699;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background: #6c757d;
+        }
+        button.secondary:hover {
+            background: #545b62;
+        }
+        .status {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 600px) {
+            body {
+                margin: 20px auto;
+                padding: 15px;
+            }
+            h1 {
+                font-size: 24px;
+                margin-bottom: 20px;
+            }
+            .actions {
+                flex-direction: column;
+            }
+            button {
+                width: 100%;
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Telegram Broadcast POC</h1>
+
+    <div class="input-group">
+        <label for="botToken">Bot Token:</label>
+        <input type="password" id="botToken" placeholder="Enter your Telegram Bot Token">
+    </div>
+
+    <div class="input-group">
+        <label for="chatId">Chat/Channel ID:</label>
+        <input type="text" id="chatId" placeholder="e.g., @channelname or -123456789">
+    </div>
+
+    <div class="input-group">
+        <label for="message">Message:</label>
+        <textarea id="message" placeholder="Enter your message to broadcast"></textarea>
+    </div>
+
+    <div class="actions">
+        <button onclick="saveSettings()">Save Settings</button>
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="sendMessage()">Send Message</button>
+        <button onclick="clearSettings()" class="secondary">Clear Settings</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <script>
+        window.onload = function() {
+            loadSettings();
+        };
+
+        function loadSettings() {
+            const settings = JSON.parse(localStorage.getItem('telegramSettings') || '{}');
+            if (settings.botToken) {
+                document.getElementById('botToken').value = settings.botToken;
+            }
+            if (settings.chatId) {
+                document.getElementById('chatId').value = settings.chatId;
+            }
+            if (settings.botToken || settings.chatId) {
+                showStatus('Settings loaded from local storage', 'info');
+            }
+        }
+
+        function saveSettings() {
+            const settings = {
+                botToken: document.getElementById('botToken').value,
+                chatId: document.getElementById('chatId').value
+            };
+            
+            if (!settings.botToken || !settings.chatId) {
+                showStatus('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            localStorage.setItem('telegramSettings', JSON.stringify(settings));
+            showStatus('Settings saved to local storage', 'success');
+        }
+
+        function clearSettings() {
+            localStorage.removeItem('telegramSettings');
+            document.getElementById('botToken').value = '';
+            document.getElementById('chatId').value = '';
+            document.getElementById('message').value = '';
+            showStatus('Settings cleared', 'info');
+        }
+
+        async function testConnection() {
+            const botToken = document.getElementById('botToken').value;
+            
+            if (!botToken) {
+                showStatus('Please enter a bot token', 'error');
+                return;
+            }
+
+            showStatus('Testing connection...', 'info');
+            
+            try {
+                const response = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+                const data = await response.json();
+                
+                if (data.ok) {
+                    showStatus(`Connected! Bot: @${data.result.username}`, 'success');
+                } else {
+                    showStatus(`Error: ${data.description || 'Invalid token'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Connection test failed:', error);
+                showStatus(`Connection failed. Check console for details.`, 'error');
+            }
+        }
+
+        async function sendMessage() {
+            const botToken = document.getElementById('botToken').value;
+            const chatId = document.getElementById('chatId').value;
+            const message = document.getElementById('message').value;
+            
+            if (!botToken || !chatId || !message) {
+                showStatus('Please fill in all fields', 'error');
+                return;
+            }
+
+            const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+            const payload = {
+                chat_id: chatId,
+                text: message,
+                parse_mode: 'HTML'
+            };
+
+            showStatus('Sending message...', 'info');
+            
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok) {
+                    showStatus('Message sent successfully!', 'success');
+                    document.getElementById('message').value = '';
+                } else {
+                    showStatus(`Error: ${data.description || 'Failed to send message'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Send message failed:', error);
+                console.log('Request details:', {
+                    url: apiUrl,
+                    method: 'POST',
+                    payload: payload
+                });
+                showStatus(`Failed to send message. Check console for details.`, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            
+            if (type !== 'error') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>

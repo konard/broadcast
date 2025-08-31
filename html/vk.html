@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VK Broadcast POC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            margin-bottom: 30px;
+            color: #333;
+            text-align: center;
+        }
+        .input-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        input[type="text"],
+        input[type="password"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #4680c2;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .checkbox-group label {
+            margin-bottom: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+        .actions {
+            margin-top: 30px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #4680c2;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+            flex: 1;
+            min-width: 150px;
+        }
+        button:hover {
+            background: #3a6ca8;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background: #6c757d;
+        }
+        button.secondary:hover {
+            background: #545b62;
+        }
+        .status {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 600px) {
+            body {
+                margin: 20px auto;
+                padding: 15px;
+            }
+            h1 {
+                font-size: 24px;
+                margin-bottom: 20px;
+            }
+            .actions {
+                flex-direction: column;
+            }
+            button {
+                width: 100%;
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>VK Broadcast POC</h1>
+
+    <div class="input-group">
+        <label for="accessToken">Access Token:</label>
+        <input type="password" id="accessToken" placeholder="Enter your VK Access Token">
+    </div>
+
+    <div class="input-group">
+        <label for="groupId">Group/Community ID:</label>
+        <input type="text" id="groupId" placeholder="e.g., 123456789 (numeric ID)">
+    </div>
+
+    <div class="input-group">
+        <label for="apiVersion">API Version:</label>
+        <input type="text" id="apiVersion" placeholder="e.g., 5.131" value="5.131">
+    </div>
+
+    <div class="input-group">
+        <label for="message">Message:</label>
+        <textarea id="message" placeholder="Enter your message to post on the wall"></textarea>
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="fromGroup" checked>
+        <label for="fromGroup">Post from group name</label>
+    </div>
+
+    <div class="actions">
+        <button onclick="saveSettings()">Save Settings</button>
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="postToWall()">Post to Wall</button>
+        <button onclick="clearSettings()" class="secondary">Clear Settings</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <script>
+        window.onload = function() {
+            loadSettings();
+        };
+
+        function loadSettings() {
+            const settings = JSON.parse(localStorage.getItem('vkSettings') || '{}');
+            if (settings.accessToken) {
+                document.getElementById('accessToken').value = settings.accessToken;
+            }
+            if (settings.groupId) {
+                document.getElementById('groupId').value = settings.groupId;
+            }
+            if (settings.apiVersion) {
+                document.getElementById('apiVersion').value = settings.apiVersion;
+            }
+            if (typeof settings.fromGroup !== 'undefined') {
+                document.getElementById('fromGroup').checked = settings.fromGroup;
+            }
+            if (settings.accessToken || settings.groupId) {
+                showStatus('Settings loaded from local storage', 'info');
+            }
+        }
+
+        function saveSettings() {
+            const settings = {
+                accessToken: document.getElementById('accessToken').value,
+                groupId: document.getElementById('groupId').value,
+                apiVersion: document.getElementById('apiVersion').value,
+                fromGroup: document.getElementById('fromGroup').checked
+            };
+            
+            if (!settings.accessToken || !settings.groupId) {
+                showStatus('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            localStorage.setItem('vkSettings', JSON.stringify(settings));
+            showStatus('Settings saved to local storage', 'success');
+        }
+
+        function clearSettings() {
+            localStorage.removeItem('vkSettings');
+            document.getElementById('accessToken').value = '';
+            document.getElementById('groupId').value = '';
+            document.getElementById('apiVersion').value = '5.131';
+            document.getElementById('message').value = '';
+            document.getElementById('fromGroup').checked = true;
+            showStatus('Settings cleared', 'info');
+        }
+
+        async function testConnection() {
+            const accessToken = document.getElementById('accessToken').value;
+            const groupId = document.getElementById('groupId').value;
+            const apiVersion = document.getElementById('apiVersion').value;
+            
+            if (!accessToken || !groupId) {
+                showStatus('Please enter access token and group ID', 'error');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                group_id: groupId,
+                access_token: accessToken,
+                v: apiVersion
+            });
+
+            showStatus('Testing connection...', 'info');
+            
+            try {
+                const response = await fetch(`https://api.vk.com/method/groups.getById?${params}`);
+                const data = await response.json();
+                
+                if (data.response) {
+                    showStatus(`Connected! Group: ${data.response[0].name}`, 'success');
+                } else if (data.error) {
+                    showStatus(`Error: ${data.error.error_msg}`, 'error');
+                } else {
+                    showStatus('Invalid response from API', 'error');
+                }
+            } catch (error) {
+                console.error('Connection test failed:', error);
+                showStatus(`Connection failed. Check console for details.`, 'error');
+            }
+        }
+
+        async function postToWall() {
+            const accessToken = document.getElementById('accessToken').value;
+            const groupId = document.getElementById('groupId').value;
+            const apiVersion = document.getElementById('apiVersion').value;
+            const message = document.getElementById('message').value;
+            const fromGroup = document.getElementById('fromGroup').checked ? 1 : 0;
+            
+            if (!accessToken || !groupId || !message) {
+                showStatus('Please fill in all fields', 'error');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                owner_id: `-${groupId}`,
+                message: message,
+                from_group: fromGroup,
+                access_token: accessToken,
+                v: apiVersion
+            });
+
+            showStatus('Posting to wall...', 'info');
+            
+            try {
+                const response = await fetch(`https://api.vk.com/method/wall.post?${params}`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.response) {
+                    showStatus(`Post published! Post ID: ${data.response.post_id}`, 'success');
+                    document.getElementById('message').value = '';
+                } else if (data.error) {
+                    showStatus(`Error: ${data.error.error_msg}`, 'error');
+                } else {
+                    showStatus('Failed to post message', 'error');
+                }
+            } catch (error) {
+                console.error('Post to wall failed:', error);
+                console.log('Request details:', {
+                    url: 'https://api.vk.com/method/wall.post',
+                    params: Object.fromEntries(params)
+                });
+                showStatus(`Failed to post. Check console for details.`, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            
+            if (type !== 'error') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
