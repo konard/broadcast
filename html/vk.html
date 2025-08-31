@@ -22,6 +22,37 @@
             color: #333;
             text-align: center;
         }
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #ddd;
+        }
+        .auth-tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.3s;
+        }
+        .auth-tab:hover {
+            color: #4680c2;
+        }
+        .auth-tab.active {
+            color: #4680c2;
+            border-bottom-color: #4680c2;
+        }
+        .auth-section {
+            display: none;
+        }
+        .auth-section.active {
+            display: block;
+        }
         .input-group {
             margin-bottom: 25px;
         }
@@ -34,6 +65,7 @@
         }
         input[type="text"],
         input[type="password"],
+        input[type="tel"],
         textarea {
             width: 100%;
             padding: 12px;
@@ -132,6 +164,46 @@
             color: #0c5460;
             border: 1px solid #bee5eb;
         }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 25px 0;
+            color: #999;
+            font-size: 13px;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #ddd;
+        }
+        .divider span {
+            padding: 0 15px;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+        .token-generator {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .token-generator h3 {
+            margin-bottom: 10px;
+            color: #4680c2;
+            font-size: 16px;
+        }
+        .token-generator a {
+            color: #4680c2;
+            text-decoration: none;
+        }
+        .token-generator a:hover {
+            text-decoration: underline;
+        }
         
         /* Mobile responsive */
         @media (max-width: 600px) {
@@ -142,6 +214,14 @@
             h1 {
                 font-size: 24px;
                 margin-bottom: 20px;
+            }
+            .auth-tabs {
+                flex-direction: column;
+                border-bottom: none;
+            }
+            .auth-tab {
+                border-bottom: 1px solid #ddd;
+                margin-bottom: 0;
             }
             .actions {
                 flex-direction: column;
@@ -156,19 +236,129 @@
 <body>
     <h1>VK Broadcast POC</h1>
 
-    <div class="input-group">
-        <label for="accessToken">Access Token:</label>
-        <input type="password" id="accessToken" placeholder="Enter your VK Access Token">
+    <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthType('community')">Community Token</button>
+        <button class="auth-tab" onclick="switchAuthType('user')">User Token</button>
+        <button class="auth-tab" onclick="switchAuthType('implicit')">Implicit Flow</button>
     </div>
 
-    <div class="input-group">
-        <label for="groupId">Group/Community ID:</label>
-        <input type="text" id="groupId" placeholder="e.g., 123456789 (numeric ID)">
+    <!-- Community Token Section -->
+    <div id="community-auth" class="auth-section active">
+        <div class="token-generator">
+            <h3>Get Community Token</h3>
+            <p>1. Go to your <a href="https://vk.com/groups" target="_blank">VK Communities</a></p>
+            <p>2. Select your community → Manage → API usage</p>
+            <p>3. Create token with wall permissions</p>
+        </div>
+
+        <div class="input-group">
+            <label for="communityToken">Community Access Token:</label>
+            <input type="password" id="communityToken" placeholder="Enter your community access token">
+            <div class="help-text">Long-lived token for posting to community walls</div>
+        </div>
+
+        <div class="input-group">
+            <label for="communityId">Community ID:</label>
+            <input type="text" id="communityId" placeholder="e.g., -123456789">
+            <div class="help-text">Negative number for groups (e.g., -123456789)</div>
+        </div>
     </div>
 
+    <!-- User Token Section -->
+    <div id="user-auth" class="auth-section">
+        <div class="token-generator">
+            <h3>Get User Token</h3>
+            <p>1. Create app at <a href="https://vk.com/editapp?act=create" target="_blank">VK Developers</a></p>
+            <p>2. Choose "Standalone" type</p>
+            <p>3. Get your App ID and use it below</p>
+        </div>
+
+        <div class="input-group">
+            <label for="appId">App ID:</label>
+            <input type="text" id="appId" placeholder="Enter your VK App ID">
+            <div class="help-text">Get from vk.com/dev</div>
+        </div>
+
+        <div class="input-group">
+            <label for="appSecret">App Secret Key:</label>
+            <input type="password" id="appSecret" placeholder="Enter your App Secret">
+            <div class="help-text">Protected key from app settings</div>
+        </div>
+
+        <div class="input-group">
+            <label for="userToken">User Access Token:</label>
+            <input type="password" id="userToken" placeholder="Enter your user access token">
+            <div class="help-text">Can be obtained via OAuth or Implicit Flow</div>
+        </div>
+
+        <div class="input-group">
+            <label for="userId">User/Page ID:</label>
+            <input type="text" id="userId" placeholder="e.g., 123456789">
+            <div class="help-text">Positive number for user pages</div>
+        </div>
+    </div>
+
+    <!-- Implicit Flow Section -->
+    <div id="implicit-auth" class="auth-section">
+        <div class="token-generator">
+            <h3>Generate Token via Implicit Flow</h3>
+            <p>Enter your App ID and select permissions to generate authorization URL</p>
+        </div>
+
+        <div class="input-group">
+            <label for="implicitAppId">App ID:</label>
+            <input type="text" id="implicitAppId" placeholder="Enter your VK App ID">
+        </div>
+
+        <div class="input-group">
+            <label for="redirectUri">Redirect URI:</label>
+            <input type="text" id="redirectUri" value="https://oauth.vk.com/blank.html" placeholder="Redirect URI">
+            <div class="help-text">Default: https://oauth.vk.com/blank.html</div>
+        </div>
+
+        <div class="input-group">
+            <label>Permissions (Scope):</label>
+            <div class="checkbox-group">
+                <input type="checkbox" id="scope_wall" checked>
+                <label for="scope_wall">wall (post to wall)</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="scope_photos">
+                <label for="scope_photos">photos (upload photos)</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="scope_groups">
+                <label for="scope_groups">groups (manage groups)</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="scope_offline" checked>
+                <label for="scope_offline">offline (non-expiring token)</label>
+            </div>
+        </div>
+
+        <button onclick="generateAuthUrl()">Generate Auth URL</button>
+        <div id="authUrlContainer" style="display: none; margin-top: 15px;">
+            <label>Authorization URL:</label>
+            <textarea id="authUrl" readonly style="margin-top: 10px;"></textarea>
+            <button onclick="copyAuthUrl()" style="margin-top: 10px;">Copy URL</button>
+        </div>
+
+        <div class="divider">
+            <span>After Authorization</span>
+        </div>
+
+        <div class="input-group">
+            <label for="implicitToken">Paste Access Token from URL:</label>
+            <input type="password" id="implicitToken" placeholder="Paste token from redirect URL">
+            <div class="help-text">After authorization, copy access_token from the redirect URL</div>
+        </div>
+    </div>
+
+    <!-- Common fields -->
     <div class="input-group">
-        <label for="apiVersion">API Version:</label>
-        <input type="text" id="apiVersion" placeholder="e.g., 5.131" value="5.131">
+        <label for="ownerId">Owner ID (Where to post):</label>
+        <input type="text" id="ownerId" placeholder="e.g., -123456789 for group, 123456789 for user">
+        <div class="help-text">Negative for groups, positive for user pages</div>
     </div>
 
     <div class="input-group">
@@ -176,9 +366,20 @@
         <textarea id="message" placeholder="Enter your message to post on the wall"></textarea>
     </div>
 
+    <div class="input-group">
+        <label for="apiVersion">API Version:</label>
+        <input type="text" id="apiVersion" value="5.131" placeholder="e.g., 5.131">
+        <div class="help-text">VK API version (recommended: 5.131 or higher)</div>
+    </div>
+
     <div class="checkbox-group">
         <input type="checkbox" id="fromGroup" checked>
-        <label for="fromGroup">Post from group name</label>
+        <label for="fromGroup">Post from group name (for community posts)</label>
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="signedPost">
+        <label for="signedPost">Sign post with author name</label>
     </div>
 
     <div class="actions">
@@ -191,41 +392,106 @@
     <div id="status" class="status"></div>
 
     <script>
+        let currentAuthType = 'community';
+
         window.onload = function() {
             loadSettings();
         };
 
+        function switchAuthType(type) {
+            currentAuthType = type;
+            
+            // Update tabs
+            document.querySelectorAll('.auth-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update sections
+            document.querySelectorAll('.auth-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(`${type}-auth`).classList.add('active');
+        }
+
+        function generateAuthUrl() {
+            const appId = document.getElementById('implicitAppId').value;
+            const redirectUri = document.getElementById('redirectUri').value;
+            
+            if (!appId) {
+                showStatus('Please enter App ID', 'error');
+                return;
+            }
+            
+            // Collect selected scopes
+            const scopes = [];
+            if (document.getElementById('scope_wall').checked) scopes.push('wall');
+            if (document.getElementById('scope_photos').checked) scopes.push('photos');
+            if (document.getElementById('scope_groups').checked) scopes.push('groups');
+            if (document.getElementById('scope_offline').checked) scopes.push('offline');
+            
+            const authUrl = `https://oauth.vk.com/authorize?client_id=${appId}&display=page&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes.join(',')}&response_type=token&v=5.131`;
+            
+            document.getElementById('authUrl').value = authUrl;
+            document.getElementById('authUrlContainer').style.display = 'block';
+            showStatus('Authorization URL generated. Copy and open in browser.', 'info');
+        }
+
+        function copyAuthUrl() {
+            const authUrl = document.getElementById('authUrl');
+            authUrl.select();
+            document.execCommand('copy');
+            showStatus('URL copied to clipboard', 'success');
+        }
+
         function loadSettings() {
             const settings = JSON.parse(localStorage.getItem('vkSettings') || '{}');
-            if (settings.accessToken) {
-                document.getElementById('accessToken').value = settings.accessToken;
-            }
-            if (settings.groupId) {
-                document.getElementById('groupId').value = settings.groupId;
-            }
-            if (settings.apiVersion) {
-                document.getElementById('apiVersion').value = settings.apiVersion;
-            }
-            if (typeof settings.fromGroup !== 'undefined') {
-                document.getElementById('fromGroup').checked = settings.fromGroup;
-            }
-            if (settings.accessToken || settings.groupId) {
+            
+            // Community auth
+            if (settings.communityToken) document.getElementById('communityToken').value = settings.communityToken;
+            if (settings.communityId) document.getElementById('communityId').value = settings.communityId;
+            
+            // User auth
+            if (settings.appId) document.getElementById('appId').value = settings.appId;
+            if (settings.appSecret) document.getElementById('appSecret').value = settings.appSecret;
+            if (settings.userToken) document.getElementById('userToken').value = settings.userToken;
+            if (settings.userId) document.getElementById('userId').value = settings.userId;
+            
+            // Implicit auth
+            if (settings.implicitAppId) document.getElementById('implicitAppId').value = settings.implicitAppId;
+            if (settings.implicitToken) document.getElementById('implicitToken').value = settings.implicitToken;
+            
+            // Common
+            if (settings.ownerId) document.getElementById('ownerId').value = settings.ownerId;
+            if (settings.apiVersion) document.getElementById('apiVersion').value = settings.apiVersion;
+            if (typeof settings.fromGroup !== 'undefined') document.getElementById('fromGroup').checked = settings.fromGroup;
+            if (typeof settings.signedPost !== 'undefined') document.getElementById('signedPost').checked = settings.signedPost;
+            
+            if (Object.keys(settings).length > 0) {
                 showStatus('Settings loaded from local storage', 'info');
             }
         }
 
         function saveSettings() {
             const settings = {
-                accessToken: document.getElementById('accessToken').value,
-                groupId: document.getElementById('groupId').value,
+                authType: currentAuthType,
+                // Community
+                communityToken: document.getElementById('communityToken').value,
+                communityId: document.getElementById('communityId').value,
+                // User
+                appId: document.getElementById('appId').value,
+                appSecret: document.getElementById('appSecret').value,
+                userToken: document.getElementById('userToken').value,
+                userId: document.getElementById('userId').value,
+                // Implicit
+                implicitAppId: document.getElementById('implicitAppId').value,
+                implicitToken: document.getElementById('implicitToken').value,
+                // Common
+                ownerId: document.getElementById('ownerId').value,
                 apiVersion: document.getElementById('apiVersion').value,
-                fromGroup: document.getElementById('fromGroup').checked
+                fromGroup: document.getElementById('fromGroup').checked,
+                signedPost: document.getElementById('signedPost').checked
             };
-            
-            if (!settings.accessToken || !settings.groupId) {
-                showStatus('Please fill in all required fields', 'error');
-                return;
-            }
             
             localStorage.setItem('vkSettings', JSON.stringify(settings));
             showStatus('Settings saved to local storage', 'success');
@@ -233,38 +499,59 @@
 
         function clearSettings() {
             localStorage.removeItem('vkSettings');
-            document.getElementById('accessToken').value = '';
-            document.getElementById('groupId').value = '';
+            // Clear all fields
+            document.querySelectorAll('input[type="text"], input[type="password"], textarea').forEach(field => {
+                field.value = '';
+            });
             document.getElementById('apiVersion').value = '5.131';
-            document.getElementById('message').value = '';
+            document.getElementById('redirectUri').value = 'https://oauth.vk.com/blank.html';
             document.getElementById('fromGroup').checked = true;
+            document.getElementById('signedPost').checked = false;
             showStatus('Settings cleared', 'info');
         }
 
+        function getAccessToken() {
+            if (currentAuthType === 'community') {
+                return document.getElementById('communityToken').value;
+            } else if (currentAuthType === 'user') {
+                return document.getElementById('userToken').value;
+            } else {
+                return document.getElementById('implicitToken').value;
+            }
+        }
+
         async function testConnection() {
-            const accessToken = document.getElementById('accessToken').value;
-            const groupId = document.getElementById('groupId').value;
+            const accessToken = getAccessToken();
+            const ownerId = document.getElementById('ownerId').value;
             const apiVersion = document.getElementById('apiVersion').value;
             
-            if (!accessToken || !groupId) {
-                showStatus('Please enter access token and group ID', 'error');
+            if (!accessToken) {
+                showStatus('Please enter an access token', 'error');
                 return;
             }
-
+            
+            showStatus('Testing connection...', 'info');
+            
             const params = new URLSearchParams({
-                group_id: groupId,
                 access_token: accessToken,
                 v: apiVersion
             });
-
-            showStatus('Testing connection...', 'info');
+            
+            // If owner ID is a group, get group info; otherwise get user info
+            const isGroup = ownerId && ownerId.startsWith('-');
+            const endpoint = isGroup ? 'groups.getById' : 'users.get';
+            
+            if (isGroup && ownerId) {
+                params.append('group_id', Math.abs(parseInt(ownerId)));
+            }
             
             try {
-                const response = await fetch(`https://api.vk.com/method/groups.getById?${params}`);
+                const response = await fetch(`https://api.vk.com/method/${endpoint}?${params}`);
                 const data = await response.json();
                 
                 if (data.response) {
-                    showStatus(`Connected! Group: ${data.response[0].name}`, 'success');
+                    const name = isGroup ? data.response[0].name : `${data.response[0].first_name} ${data.response[0].last_name}`;
+                    showStatus(`Connected! ${isGroup ? 'Group' : 'User'}: ${name}`, 'success');
                 } else if (data.error) {
                     showStatus(`Error: ${data.error.error_msg}`, 'error');
                 } else {
@@ -277,26 +564,28 @@
         }
 
         async function postToWall() {
-            const accessToken = document.getElementById('accessToken').value;
-            const groupId = document.getElementById('groupId').value;
-            const apiVersion = document.getElementById('apiVersion').value;
+            const accessToken = getAccessToken();
+            const ownerId = document.getElementById('ownerId').value;
             const message = document.getElementById('message').value;
+            const apiVersion = document.getElementById('apiVersion').value;
             const fromGroup = document.getElementById('fromGroup').checked ? 1 : 0;
+            const signed = document.getElementById('signedPost').checked ? 1 : 0;
             
-            if (!accessToken || !groupId || !message) {
-                showStatus('Please fill in all fields', 'error');
+            if (!accessToken || !ownerId || !message) {
+                showStatus('Please fill in all required fields', 'error');
                 return;
             }
-
+            
+            showStatus('Posting to wall...', 'info');
+            
             const params = new URLSearchParams({
-                owner_id: `-${groupId}`,
+                owner_id: ownerId,
                 message: message,
                 from_group: fromGroup,
+                signed: signed,
                 access_token: accessToken,
                 v: apiVersion
             });
-
-            showStatus('Posting to wall...', 'info');
             
             try {
                 const response = await fetch(`https://api.vk.com/method/wall.post?${params}`, {
@@ -310,6 +599,7 @@
                     document.getElementById('message').value = '';
                 } else if (data.error) {
                     showStatus(`Error: ${data.error.error_msg}`, 'error');
+                    console.error('VK API Error:', data.error);
                 } else {
                     showStatus('Failed to post message', 'error');
                 }

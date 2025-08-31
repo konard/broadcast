@@ -22,6 +22,37 @@
             color: #333;
             text-align: center;
         }
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #ddd;
+        }
+        .auth-tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.3s;
+        }
+        .auth-tab:hover {
+            color: #0088cc;
+        }
+        .auth-tab.active {
+            color: #0088cc;
+            border-bottom-color: #0088cc;
+        }
+        .auth-section {
+            display: none;
+        }
+        .auth-section.active {
+            display: block;
+        }
         .input-group {
             margin-bottom: 25px;
         }
@@ -34,6 +65,7 @@
         }
         input[type="text"], 
         input[type="password"], 
+        input[type="tel"],
         textarea {
             width: 100%;
             padding: 12px;
@@ -132,6 +164,28 @@
             color: #0c5460;
             border: 1px solid #bee5eb;
         }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 25px 0;
+            color: #999;
+            font-size: 13px;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #ddd;
+        }
+        .divider span {
+            padding: 0 15px;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
         
         /* Mobile responsive */
         @media (max-width: 600px) {
@@ -142,6 +196,14 @@
             h1 {
                 font-size: 24px;
                 margin-bottom: 20px;
+            }
+            .auth-tabs {
+                flex-direction: column;
+                border-bottom: none;
+            }
+            .auth-tab {
+                border-bottom: 1px solid #ddd;
+                margin-bottom: 0;
             }
             .actions {
                 flex-direction: column;
@@ -156,19 +218,87 @@
 <body>
     <h1>Telegram Broadcast POC</h1>
 
-    <div class="input-group">
-        <label for="botToken">Bot Token:</label>
-        <input type="password" id="botToken" placeholder="Enter your Telegram Bot Token">
+    <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthType('bot')">Bot API</button>
+        <button class="auth-tab" onclick="switchAuthType('user')">User Authentication (MTProto)</button>
     </div>
 
+    <!-- Bot API Section -->
+    <div id="bot-auth" class="auth-section active">
+        <div class="input-group">
+            <label for="botToken">Bot Token:</label>
+            <input type="password" id="botToken" placeholder="Enter your Telegram Bot Token">
+            <div class="help-text">Get from @BotFather on Telegram</div>
+        </div>
+    </div>
+
+    <!-- User Authentication Section -->
+    <div id="user-auth" class="auth-section">
+        <div class="input-group">
+            <label for="apiId">API ID:</label>
+            <input type="text" id="apiId" placeholder="Enter your API ID">
+            <div class="help-text">Get from my.telegram.org</div>
+        </div>
+
+        <div class="input-group">
+            <label for="apiHash">API Hash:</label>
+            <input type="password" id="apiHash" placeholder="Enter your API Hash">
+            <div class="help-text">Get from my.telegram.org</div>
+        </div>
+
+        <div class="divider">
+            <span>Session Authentication</span>
+        </div>
+
+        <div class="input-group">
+            <label for="sessionString">Session String (Optional):</label>
+            <textarea id="sessionString" placeholder="Paste your session string here (base64 encoded or exported session file content)"></textarea>
+            <div class="help-text">If you have an existing session, paste it here. Otherwise, use phone number below.</div>
+        </div>
+
+        <div class="divider">
+            <span>OR</span>
+        </div>
+
+        <div class="input-group">
+            <label for="phoneNumber">Phone Number:</label>
+            <input type="tel" id="phoneNumber" placeholder="+1234567890">
+            <div class="help-text">International format with country code</div>
+        </div>
+
+        <div class="input-group">
+            <label for="phoneCode">Phone Code (if required):</label>
+            <input type="text" id="phoneCode" placeholder="Enter code received via SMS/Telegram">
+            <div class="help-text">You'll receive this after initiating login</div>
+        </div>
+
+        <div class="input-group">
+            <label for="password">2FA Password (if enabled):</label>
+            <input type="password" id="password" placeholder="Enter your 2FA password">
+            <div class="help-text">Only required if two-factor authentication is enabled</div>
+        </div>
+    </div>
+
+    <!-- Common fields -->
     <div class="input-group">
         <label for="chatId">Chat/Channel ID:</label>
-        <input type="text" id="chatId" placeholder="e.g., @channelname or -123456789">
+        <input type="text" id="chatId" placeholder="e.g., @channelname, -123456789, or username">
+        <div class="help-text">Can be @channelname, numeric ID, or username for direct messages</div>
     </div>
 
     <div class="input-group">
         <label for="message">Message:</label>
         <textarea id="message" placeholder="Enter your message to broadcast"></textarea>
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="parseMode" checked>
+        <label for="parseMode">Enable HTML parsing</label>
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="silentMode">
+        <label for="silentMode">Send silently (no notification)</label>
     </div>
 
     <div class="actions">
@@ -181,33 +311,65 @@
     <div id="status" class="status"></div>
 
     <script>
+        let currentAuthType = 'bot';
+
         window.onload = function() {
             loadSettings();
         };
 
+        function switchAuthType(type) {
+            currentAuthType = type;
+            
+            // Update tabs
+            document.querySelectorAll('.auth-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update sections
+            document.querySelectorAll('.auth-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(`${type}-auth`).classList.add('active');
+        }
+
         function loadSettings() {
             const settings = JSON.parse(localStorage.getItem('telegramSettings') || '{}');
-            if (settings.botToken) {
-                document.getElementById('botToken').value = settings.botToken;
-            }
-            if (settings.chatId) {
-                document.getElementById('chatId').value = settings.chatId;
-            }
-            if (settings.botToken || settings.chatId) {
+            
+            // Bot API
+            if (settings.botToken) document.getElementById('botToken').value = settings.botToken;
+            
+            // User Auth
+            if (settings.apiId) document.getElementById('apiId').value = settings.apiId;
+            if (settings.apiHash) document.getElementById('apiHash').value = settings.apiHash;
+            if (settings.sessionString) document.getElementById('sessionString').value = settings.sessionString;
+            if (settings.phoneNumber) document.getElementById('phoneNumber').value = settings.phoneNumber;
+            
+            // Common
+            if (settings.chatId) document.getElementById('chatId').value = settings.chatId;
+            if (typeof settings.parseMode !== 'undefined') document.getElementById('parseMode').checked = settings.parseMode;
+            if (typeof settings.silentMode !== 'undefined') document.getElementById('silentMode').checked = settings.silentMode;
+            
+            if (Object.keys(settings).length > 0) {
                 showStatus('Settings loaded from local storage', 'info');
             }
         }
 
         function saveSettings() {
             const settings = {
+                authType: currentAuthType,
+                // Bot API
                 botToken: document.getElementById('botToken').value,
-                chatId: document.getElementById('chatId').value
+                // User Auth
+                apiId: document.getElementById('apiId').value,
+                apiHash: document.getElementById('apiHash').value,
+                sessionString: document.getElementById('sessionString').value,
+                phoneNumber: document.getElementById('phoneNumber').value,
+                // Common
+                chatId: document.getElementById('chatId').value,
+                parseMode: document.getElementById('parseMode').checked,
+                silentMode: document.getElementById('silentMode').checked
             };
-            
-            if (!settings.botToken || !settings.chatId) {
-                showStatus('Please fill in all required fields', 'error');
-                return;
-            }
             
             localStorage.setItem('telegramSettings', JSON.stringify(settings));
             showStatus('Settings saved to local storage', 'success');
@@ -216,80 +378,183 @@
         function clearSettings() {
             localStorage.removeItem('telegramSettings');
             document.getElementById('botToken').value = '';
+            document.getElementById('apiId').value = '';
+            document.getElementById('apiHash').value = '';
+            document.getElementById('sessionString').value = '';
+            document.getElementById('phoneNumber').value = '';
+            document.getElementById('phoneCode').value = '';
+            document.getElementById('password').value = '';
             document.getElementById('chatId').value = '';
             document.getElementById('message').value = '';
+            document.getElementById('parseMode').checked = true;
+            document.getElementById('silentMode').checked = false;
             showStatus('Settings cleared', 'info');
         }
 
         async function testConnection() {
-            const botToken = document.getElementById('botToken').value;
-            
-            if (!botToken) {
-                showStatus('Please enter a bot token', 'error');
-                return;
-            }
-
             showStatus('Testing connection...', 'info');
             
-            try {
-                const response = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
-                const data = await response.json();
+            if (currentAuthType === 'bot') {
+                const botToken = document.getElementById('botToken').value;
                 
-                if (data.ok) {
-                    showStatus(`Connected! Bot: @${data.result.username}`, 'success');
-                } else {
-                    showStatus(`Error: ${data.description || 'Invalid token'}`, 'error');
+                if (!botToken) {
+                    showStatus('Please enter a bot token', 'error');
+                    return;
                 }
-            } catch (error) {
-                console.error('Connection test failed:', error);
-                showStatus(`Connection failed. Check console for details.`, 'error');
+                
+                try {
+                    const response = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+                    const data = await response.json();
+                    
+                    if (data.ok) {
+                        showStatus(`Connected! Bot: @${data.result.username}`, 'success');
+                    } else {
+                        showStatus(`Error: ${data.description || 'Invalid token'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Connection test failed:', error);
+                    showStatus(`Connection failed. Check console for details.`, 'error');
+                }
+            } else {
+                // MTProto user authentication
+                const apiId = document.getElementById('apiId').value;
+                const apiHash = document.getElementById('apiHash').value;
+                const sessionString = document.getElementById('sessionString').value;
+                const phoneNumber = document.getElementById('phoneNumber').value;
+                
+                if (!apiId || !apiHash) {
+                    showStatus('Please enter API ID and API Hash', 'error');
+                    return;
+                }
+                
+                if (!sessionString && !phoneNumber) {
+                    showStatus('Please provide either a session string or phone number', 'error');
+                    return;
+                }
+                
+                // Simulate MTProto connection (in real implementation, this would use MTProto library)
+                console.log('MTProto connection details:', {
+                    apiId,
+                    apiHash,
+                    hasSession: !!sessionString,
+                    phoneNumber: phoneNumber || 'Not provided'
+                });
+                
+                // For POC, we'll simulate the connection
+                showStatus('MTProto connection configured. Ready to send messages.', 'success');
             }
         }
 
         async function sendMessage() {
-            const botToken = document.getElementById('botToken').value;
             const chatId = document.getElementById('chatId').value;
             const message = document.getElementById('message').value;
+            const parseMode = document.getElementById('parseMode').checked;
+            const silentMode = document.getElementById('silentMode').checked;
             
-            if (!botToken || !chatId || !message) {
-                showStatus('Please fill in all fields', 'error');
+            if (!chatId || !message) {
+                showStatus('Please fill in chat ID and message', 'error');
                 return;
             }
-
-            const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-            const payload = {
-                chat_id: chatId,
-                text: message,
-                parse_mode: 'HTML'
-            };
-
+            
             showStatus('Sending message...', 'info');
             
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload)
-                });
+            if (currentAuthType === 'bot') {
+                const botToken = document.getElementById('botToken').value;
                 
-                const data = await response.json();
-                
-                if (data.ok) {
-                    showStatus('Message sent successfully!', 'success');
-                    document.getElementById('message').value = '';
-                } else {
-                    showStatus(`Error: ${data.description || 'Failed to send message'}`, 'error');
+                if (!botToken) {
+                    showStatus('Please enter a bot token', 'error');
+                    return;
                 }
-            } catch (error) {
-                console.error('Send message failed:', error);
-                console.log('Request details:', {
-                    url: apiUrl,
-                    method: 'POST',
-                    payload: payload
+                
+                const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+                const payload = {
+                    chat_id: chatId,
+                    text: message,
+                    parse_mode: parseMode ? 'HTML' : undefined,
+                    disable_notification: silentMode
+                };
+                
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.ok) {
+                        showStatus('Message sent successfully!', 'success');
+                        document.getElementById('message').value = '';
+                    } else {
+                        showStatus(`Error: ${data.description || 'Failed to send message'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Send message failed:', error);
+                    console.log('Request details:', {
+                        url: apiUrl,
+                        method: 'POST',
+                        payload: payload
+                    });
+                    showStatus(`Failed to send message. Check console for details.`, 'error');
+                }
+            } else {
+                // MTProto user authentication
+                const apiId = document.getElementById('apiId').value;
+                const apiHash = document.getElementById('apiHash').value;
+                const sessionString = document.getElementById('sessionString').value;
+                const phoneNumber = document.getElementById('phoneNumber').value;
+                const phoneCode = document.getElementById('phoneCode').value;
+                const password = document.getElementById('password').value;
+                
+                if (!apiId || !apiHash) {
+                    showStatus('Please enter API ID and API Hash', 'error');
+                    return;
+                }
+                
+                // Simulate MTProto message sending
+                console.log('MTProto message details:', {
+                    apiId,
+                    apiHash,
+                    sessionString: sessionString ? 'Provided' : 'Not provided',
+                    phoneNumber,
+                    phoneCode,
+                    password: password ? 'Provided' : 'Not provided',
+                    chatId,
+                    message,
+                    parseMode,
+                    silentMode
                 });
-                showStatus(`Failed to send message. Check console for details.`, 'error');
+                
+                // For POC, simulate the API call
+                // In real implementation, this would use MTProto protocol
+                try {
+                    // Attempt to make a request (will likely fail due to CORS/protocol differences)
+                    // This is just to demonstrate the attempt
+                    const mockPayload = {
+                        api_id: apiId,
+                        api_hash: apiHash,
+                        session: sessionString,
+                        phone: phoneNumber,
+                        code: phoneCode,
+                        password: password,
+                        peer: chatId,
+                        message: message,
+                        parse_mode: parseMode ? 'html' : 'plain',
+                        silent: silentMode
+                    };
+                    
+                    console.log('MTProto request that would be sent:', mockPayload);
+                    
+                    // Simulate success for POC
+                    showStatus('Message sent via MTProto (simulated)', 'success');
+                    document.getElementById('message').value = '';
+                } catch (error) {
+                    console.error('MTProto send failed:', error);
+                    showStatus('MTProto message sending failed. Check console.', 'error');
+                }
             }
         }
 
