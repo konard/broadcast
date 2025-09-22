@@ -373,6 +373,30 @@ export class XBroadcaster {
   }
 
   /**
+   * Validate message for X.com constraints
+   * @param {string} message - The message to validate
+   * @returns {object} Object with isValid boolean and errors array
+   */
+  validateMessage(message) {
+    const errors = [];
+    const MAX_TWEET_LENGTH = 280;
+
+    if (!message || typeof message !== 'string') {
+      errors.push('Message must be a non-empty string');
+      return { isValid: false, errors };
+    }
+
+    if (message.length > MAX_TWEET_LENGTH) {
+      errors.push(`Message is too long for X.com: ${message.length} characters (max ${MAX_TWEET_LENGTH})`);
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
+  /**
    * Test the X.com configuration and connectivity
    */
   async test() {

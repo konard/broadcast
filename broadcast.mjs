@@ -35,10 +35,10 @@ async function broadcast(message, platforms) {
   const logLevel = getenv('LOG_LEVEL', 'info');
   const logger = new Logger(logLevel);
   const results = [];
-  
+
   // Determine which broadcasters to use
   let targetBroadcasters = [];
-  
+
   if (platforms.includes('all')) {
     targetBroadcasters = broadcasters;
   } else {
@@ -46,24 +46,58 @@ async function broadcast(message, platforms) {
       .map(platform => getBroadcaster(platform))
       .filter(broadcaster => broadcaster !== undefined);
   }
-  
+
   if (targetBroadcasters.length === 0) {
     logger.error('No valid broadcasters found for specified platforms');
     return [];
   }
-  
-  // Send to each broadcaster
+
+  // Validate message for all target broadcasters first
+  logger.debug('Validating message for all target platforms...');
+  const validationErrors = [];
+
   for (const broadcaster of targetBroadcasters) {
     if (!broadcaster.isConfigured()) {
       const errors = broadcaster.getConfigurationErrors();
-      results.push({
-        success: false,
+      validationErrors.push({
         platform: broadcaster.name,
-        error: `Configuration errors: ${errors.join(', ')}`
+        errors: [`Configuration errors: ${errors.join(', ')}`]
       });
       continue;
     }
-    
+
+    // Check if broadcaster has validateMessage method
+    if (typeof broadcaster.validateMessage === 'function') {
+      const validation = broadcaster.validateMessage(message);
+      if (!validation.isValid) {
+        validationErrors.push({
+          platform: broadcaster.name,
+          errors: validation.errors
+        });
+      }
+    }
+  }
+
+  // If any validation failed, return early without sending to any platform
+  if (validationErrors.length > 0) {
+    logger.error('Message validation failed for one or more platforms:');
+    validationErrors.forEach(({ platform, errors }) => {
+      errors.forEach(error => {
+        logger.error(`  ${platform.toUpperCase()}: ${error}`);
+      });
+    });
+
+    return validationErrors.map(({ platform, errors }) => ({
+      success: false,
+      platform,
+      error: errors.join(', ')
+    }));
+  }
+
+  logger.debug('Message validation passed for all target platforms');
+
+  // Send to each broadcaster (all validations have already passed)
+  for (const broadcaster of targetBroadcasters) {
     try {
       const result = await broadcaster.send(message);
       results.push(result);
