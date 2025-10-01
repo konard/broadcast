@@ -143,9 +143,9 @@ const argv = yargs(hideBin(process.argv))
     default: 'all',
     choices: [...getBroadcasterNames(), 'all']
   })
-  .option('test', {
-    alias: 't',
-    describe: 'Test mode (do not send, just log)',
+  .option('dry-run', {
+    alias: 'd',
+    describe: 'Dry run mode (do not send, just log)',
     type: 'boolean',
     default: false
   })
@@ -181,10 +181,10 @@ const argv = yargs(hideBin(process.argv))
     process.exit(1);
   }
 
-  if (argv.test) {
-    console.log(`🧪 Test mode: Broadcasting message to: ${platforms.join(', ')}`);
+  if (argv['dry-run']) {
+    console.log(`🧪 Dry run: Broadcasting message to: ${platforms.join(', ')}`);
     console.log(`📝 Message: ${message}`);
-    console.log('✅ Test completed (no actual send)');
+    console.log('✅ Dry run completed (no actual send)');
     return;
   }
 

@@ -157,10 +157,12 @@ export class XBroadcaster {
         
       } else {
         this.logger.error('No valid X.com authentication method configured');
+        this.authMethod = 'None';
       }
     } catch (error) {
       this.logger.error('Failed to initialize X.com client:', error.message);
       this.client = null;
+      this.authMethod = 'None';
     }
   }
 
@@ -198,8 +200,18 @@ export class XBroadcaster {
         if (this.authMethod === 'Bearer Token') {
           throw new Error('Bearer token authentication cannot post tweets - user authentication required');
         }
+
+        // Check if no authentication method was set
+        if (this.authMethod === 'None') {
+          throw new Error('No valid authentication method configured for X.com');
+        }
         
         const result = await this.client.v2.tweet(message);
+
+        // Validate the response to ensure tweet was actually created
+        if (!result || !result.data || !result.data.id) {
+          throw new Error('Invalid response from X.com API - tweet may not have been created');
+        }
 
         this.logger.info('✅ Tweet posted to X.com successfully');
         return {
@@ -240,6 +252,13 @@ export class XBroadcaster {
         } else {
           // Non-rate-limit error, don't retry
           this.logger.error('Failed to post X.com tweet:', error.message);
+          // Log additional error details for debugging
+          if (error.response) {
+            this.logger.debug('Error response:', JSON.stringify(error.response, null, 2));
+          }
+          if (error.data) {
+            this.logger.debug('Error data:', JSON.stringify(error.data, null, 2));
+          }
           return {
             success: false,
             platform: this.name,
