@@ -218,6 +218,30 @@ export class TelegramBroadcaster {
   }
 
   /**
+   * Validate message for Telegram constraints
+   * @param {string} message - The message to validate
+   * @returns {object} Object with isValid boolean and errors array
+   */
+  validateMessage(message) {
+    const errors = [];
+    const MAX_MESSAGE_LENGTH = 4096;
+
+    if (!message || typeof message !== 'string') {
+      errors.push('Message must be a non-empty string');
+      return { isValid: false, errors };
+    }
+
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      errors.push(`Message is too long for Telegram: ${message.length} characters (max ${MAX_MESSAGE_LENGTH})`);
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
+  /**
    * Send message to Telegram channel
    */
   async send(message) {

@@ -79,6 +79,26 @@ export class VKBroadcaster {
   }
 
   /**
+   * Validate message for VK constraints
+   * @param {string} message - The message to validate
+   * @returns {object} Object with isValid boolean and errors array
+   */
+  validateMessage(message) {
+    const errors = [];
+
+    if (!message || typeof message !== 'string') {
+      errors.push('Message must be a non-empty string');
+      return { isValid: false, errors };
+    }
+
+    // VK has no strict character limit for wall posts
+    return {
+      isValid: true,
+      errors: []
+    };
+  }
+
+  /**
    * Send message to VK wall
    */
   async send(message) {
