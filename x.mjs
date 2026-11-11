@@ -7,54 +7,122 @@ import { Logger } from './logger.mjs';
 dotenv.config();
 
 /**
+ * Supported X.com authentication modes.
+ *
+ * - oauth2:  OAuth 2.0 user-context access token (Authorization Code with PKCE).
+ *            The SDK client is built from the token string (bearer auth).
+ *            Client ID/secret are only needed to obtain/refresh tokens, not to post.
+ * - oauth1:  OAuth 1.0a user context: API key/secret + access token/secret
+ *            (the four-field SDK constructor).
+ * - app:     Application-only bearer token. Read-only, can never post.
+ */
+export const X_AUTH_MODES = {
+  OAUTH2_USER: 'oauth2',
+  OAUTH1_USER: 'oauth1',
+  APP_ONLY: 'app'
+};
+
+const AUTH_METHOD_LABELS = {
+  oauth2: 'OAuth 2.0 User',
+  oauth1: 'OAuth 1.0a User',
+  app: 'App-only Bearer Token'
+};
+
+const MODE_ALIASES = {
+  oauth2: 'oauth2', 'oauth2-user': 'oauth2',
+  oauth1: 'oauth1', 'oauth1a': 'oauth1', 'oauth1-user': 'oauth1',
+  app: 'app', 'app-only': 'app', bearer: 'app'
+};
+
+/**
  * X.com configuration class
  */
-class XConfig {
+export class XConfig {
   constructor() {
-    // OAuth 2.0 User Context (modern authentication)
+    // Optional explicit mode selection: oauth2 | oauth1 | app (auto when empty)
+    this.authModeSetting = getenv('X_AUTH_MODE', '').trim().toLowerCase();
+
+    // OAuth 2.0 user context
+    // X_OAUTH2_ACCESS_TOKEN is the explicit variable; X_ACCESS_TOKEN without
+    // X_ACCESS_TOKEN_SECRET is also treated as an OAuth 2.0 user token.
+    this.oauth2AccessToken = getenv('X_OAUTH2_ACCESS_TOKEN', '');
+    // Client ID/secret are only used to obtain/refresh OAuth 2.0 tokens.
     this.clientId = getenv('X_CLIENT_ID', '');
     this.clientSecret = getenv('X_CLIENT_SECRET', '');
-    
-    // OAuth 1.0a User Context (legacy authentication)
+
+    // OAuth 1.0a user context
     this.apiKey = getenv('X_API_KEY', '');
     this.apiKeySecret = getenv('X_API_KEY_SECRET', '');
-    
-    // Access tokens (used by both OAuth 2.0 and 1.0a)
     this.accessToken = getenv('X_ACCESS_TOKEN', '');
     this.accessTokenSecret = getenv('X_ACCESS_TOKEN_SECRET', '');
-    
-    // Bearer Token (for app-only auth, limited functionality)
+
+    // Application-only bearer token (read-only)
     this.bearerToken = getenv('X_BEARER_TOKEN', '');
-    
+
     this.logLevel = getenv('LOG_LEVEL', 'info');
   }
 
-  /**
-   * Check if OAuth 2.0 user authentication is configured
-   */
-  get hasOAuth2UserAuth() {
-    return !!(this.clientId && this.clientSecret && this.accessToken && this.accessTokenSecret);
+  /** OAuth 2.0 user token, if any */
+  get oauth2UserToken() {
+    if (this.oauth2AccessToken) return this.oauth2AccessToken;
+    if (this.accessToken && !this.accessTokenSecret) return this.accessToken;
+    return '';
   }
 
-  /**
-   * Check if OAuth 1.0a user authentication is configured
-   */
+  get hasOAuth2UserAuth() {
+    return !!this.oauth2UserToken;
+  }
+
   get hasOAuth1UserAuth() {
     return !!(this.apiKey && this.apiKeySecret && this.accessToken && this.accessTokenSecret);
   }
 
-  /**
-   * Check if any user authentication is configured
-   */
+  /** Any OAuth 1.0a-specific value is present */
+  get hasAnyOAuth1Value() {
+    return !!(this.apiKey || this.apiKeySecret || this.accessTokenSecret);
+  }
+
   get hasUserAuth() {
     return this.hasOAuth2UserAuth || this.hasOAuth1UserAuth;
   }
 
-  /**
-   * Check if bearer token authentication is configured
-   */
   get hasBearerAuth() {
     return !!this.bearerToken;
+  }
+
+  /** Explicitly requested mode, normalized (null when automatic) */
+  get requestedMode() {
+    if (!this.authModeSetting || this.authModeSetting === 'auto') return null;
+    return MODE_ALIASES[this.authModeSetting] || 'invalid';
+  }
+
+  /**
+   * Resolve the authentication mode.
+   * Automatic priority: complete OAuth 1.0a > OAuth 2.0 user token > app-only bearer.
+   * @returns {string|null}
+   */
+  get authMode() {
+    const requested = this.requestedMode;
+    if (requested === 'invalid') return null;
+    if (requested === 'oauth1') return this.hasOAuth1UserAuth ? 'oauth1' : null;
+    if (requested === 'oauth2') return this.hasOAuth2UserAuth ? 'oauth2' : null;
+    if (requested === 'app') return this.hasBearerAuth ? 'app' : null;
+
+    if (this.hasOAuth1UserAuth) return 'oauth1';
+    // Incomplete OAuth 1.0a credentials are an error unless an explicit OAuth 2.0 token exists
+    if (this.hasAnyOAuth1Value && !this.oauth2AccessToken) return null;
+    if (this.hasOAuth2UserAuth) return 'oauth2';
+    if (this.hasBearerAuth) return 'app';
+    return null;
+  }
+
+  oauth1MissingFields() {
+    const missing = [];
+    if (!this.apiKey) missing.push('X_API_KEY');
+    if (!this.apiKeySecret) missing.push('X_API_KEY_SECRET');
+    if (!this.accessToken) missing.push('X_ACCESS_TOKEN');
+    if (!this.accessTokenSecret) missing.push('X_ACCESS_TOKEN_SECRET');
+    return missing;
   }
 
   /**
@@ -63,30 +131,30 @@ class XConfig {
    */
   validate() {
     const errors = [];
-    
-    if (!this.hasUserAuth && !this.hasBearerAuth) {
-      errors.push('At least one authentication method is required: OAuth 2.0 (X_CLIENT_ID + X_CLIENT_SECRET + tokens), OAuth 1.0a (X_API_KEY + X_API_KEY_SECRET + tokens), or Bearer token (X_BEARER_TOKEN)');
+    const requested = this.requestedMode;
+
+    if (requested === 'invalid') {
+      errors.push(`Invalid X_AUTH_MODE "${this.authModeSetting}" (expected: oauth2, oauth1, app or auto)`);
+      return { errors };
     }
-    
-    if (this.hasOAuth2UserAuth) {
-      if (!this.clientId) errors.push('X_CLIENT_ID is required for OAuth 2.0 user auth');
-      if (!this.clientSecret) errors.push('X_CLIENT_SECRET is required for OAuth 2.0 user auth');
-      if (!this.accessToken) errors.push('X_ACCESS_TOKEN is required for OAuth 2.0 user auth');
-      if (!this.accessTokenSecret) errors.push('X_ACCESS_TOKEN_SECRET is required for OAuth 2.0 user auth');
-    } else if (this.hasOAuth1UserAuth) {
-      if (!this.apiKey) errors.push('X_API_KEY is required for OAuth 1.0a user auth');
-      if (!this.apiKeySecret) errors.push('X_API_KEY_SECRET is required for OAuth 1.0a user auth');
-      if (!this.accessToken) errors.push('X_ACCESS_TOKEN is required for OAuth 1.0a user auth');
-      if (!this.accessTokenSecret) errors.push('X_ACCESS_TOKEN_SECRET is required for OAuth 1.0a user auth');
+
+    if (requested === 'oauth1' && !this.hasOAuth1UserAuth) {
+      errors.push(`OAuth 1.0a user auth requires: ${this.oauth1MissingFields().join(', ')}`);
+    } else if (requested === 'oauth2' && !this.hasOAuth2UserAuth) {
+      errors.push('OAuth 2.0 user auth requires X_OAUTH2_ACCESS_TOKEN (or X_ACCESS_TOKEN without X_ACCESS_TOKEN_SECRET)');
+    } else if (requested === 'app' && !this.hasBearerAuth) {
+      errors.push('App-only auth requires X_BEARER_TOKEN');
+    } else if (!requested && !this.authMode) {
+      if (this.hasAnyOAuth1Value) {
+        errors.push(`Incomplete OAuth 1.0a credentials, missing: ${this.oauth1MissingFields().join(', ')}`);
+      } else {
+        errors.push('At least one authentication method is required: OAuth 2.0 user token (X_OAUTH2_ACCESS_TOKEN), OAuth 1.0a (X_API_KEY + X_API_KEY_SECRET + X_ACCESS_TOKEN + X_ACCESS_TOKEN_SECRET), or app-only bearer token (X_BEARER_TOKEN, read-only)');
+      }
     }
-    
+
     return { errors };
   }
 
-  /**
-   * Check if configuration is valid
-   * @returns {boolean}
-   */
   get isValid() {
     return this.validate().errors.length === 0;
   }
@@ -96,72 +164,61 @@ class XConfig {
  * X.com broadcaster implementation
  */
 export class XBroadcaster {
-  constructor() {
+  /**
+   * @param {object} [options]
+   * @param {Function} [options.ApiClient] - SDK client constructor (injectable for tests)
+   */
+  constructor(options = {}) {
     this.name = 'x';
     this.displayName = 'X.com';
-    
-    // Initialize X-specific configuration
+    this.ApiClient = options.ApiClient || TwitterApi;
+
     this.config = new XConfig();
     this.logger = new Logger(this.config.logLevel);
-    
-    // Initialize Twitter API client
+
     this.client = null;
+    this.authMode = null;
+    this.authMethod = 'None';
     this.initializeClient();
   }
 
+  /** Whether the configured credentials can publish (user context only) */
+  get canPost() {
+    return this.authMode === 'oauth1' || this.authMode === 'oauth2';
+  }
+
   /**
-   * Initialize Twitter API client based on available authentication
-   * Priority order: OAuth 2.0 > OAuth 1.0a > Bearer Token
+   * Initialize the SDK client for the resolved authentication mode
    */
   initializeClient() {
+    const mode = this.config.authMode;
     try {
-      // Priority 1: OAuth 2.0 User Context (preferred when available)
-      if (this.config.hasOAuth2UserAuth) {
-        // OAuth 2.0 User Context (modern authentication with Client ID/Secret)
-        // Note: For CLI usage with existing access tokens, we use the OAuth 1.0a-style constructor
-        // but with OAuth 2.0 credentials (Client ID/Secret instead of API Key/Secret)
-        this.client = new TwitterApi({
-          appKey: this.config.clientId,
-          appSecret: this.config.clientSecret,
-          accessToken: this.config.accessToken,
-          accessSecret: this.config.accessTokenSecret,
-        });
-        
-        this.authMethod = 'OAuth 2.0 User';
-        this.logger.debug('X.com client initialized with OAuth 2.0 user authentication (Client ID/Secret)');
-        
-        // Log if OAuth 1.0a is also available but not used
-        if (this.config.hasOAuth1UserAuth) {
-          this.logger.debug('OAuth 1.0a credentials also detected but OAuth 2.0 takes priority');
-        }
-        
-      // Priority 2: OAuth 1.0a User Context (fallback)
-      } else if (this.config.hasOAuth1UserAuth) {
-        // OAuth 1.0a User Context (legacy authentication with API Key/Secret)
-        this.client = new TwitterApi({
+      if (mode === 'oauth1') {
+        this.client = new this.ApiClient({
           appKey: this.config.apiKey,
           appSecret: this.config.apiKeySecret,
           accessToken: this.config.accessToken,
           accessSecret: this.config.accessTokenSecret,
         });
-        
-        this.authMethod = 'OAuth 1.0a User';
-        this.logger.debug('X.com client initialized with OAuth 1.0a user authentication');
-        
-      // Priority 3: Bearer Token (app-only, limited functionality)
-      } else if (this.config.hasBearerAuth) {
-        // Bearer Token (app-only, limited functionality)
-        this.client = new TwitterApi(this.config.bearerToken);
-        this.authMethod = 'Bearer Token';
-        this.logger.debug('X.com client initialized with Bearer token (limited functionality)');
-        
+      } else if (mode === 'oauth2') {
+        // OAuth 2.0 user access token is sent as a bearer token
+        this.client = new this.ApiClient(this.config.oauth2UserToken);
+      } else if (mode === 'app') {
+        this.client = new this.ApiClient(this.config.bearerToken);
       } else {
-        this.logger.error('No valid X.com authentication method configured');
+        this.logger.debug('No valid X.com authentication method configured');
+        this.client = null;
+        this.authMode = null;
         this.authMethod = 'None';
+        return;
       }
+      this.authMode = mode;
+      this.authMethod = AUTH_METHOD_LABELS[mode];
+      this.logger.debug(`X.com client initialized with ${this.authMethod} authentication`);
     } catch (error) {
       this.logger.error('Failed to initialize X.com client:', error.message);
       this.client = null;
+      this.authMode = null;
       this.authMethod = 'None';
     }
   }
@@ -197,12 +254,12 @@ export class XBroadcaster {
         }
 
         // Check if bearer token is being used (which has limited posting capabilities)
-        if (this.authMethod === 'Bearer Token') {
-          throw new Error('Bearer token authentication cannot post tweets - user authentication required');
+        if (this.authMode === 'app') {
+          throw new Error('App-only bearer token cannot post tweets - OAuth 2.0 or OAuth 1.0a user authentication required');
         }
 
         // Check if no authentication method was set
-        if (this.authMethod === 'None') {
+        if (!this.authMode) {
           throw new Error('No valid authentication method configured for X.com');
         }
         
@@ -262,7 +319,7 @@ export class XBroadcaster {
           return {
             success: false,
             platform: this.name,
-            error: error.message
+            error: this.describeAuthError(error)
           };
         }
       }
@@ -282,7 +339,7 @@ export class XBroadcaster {
         }
 
         // Check if bearer token is being used (which cannot delete tweets)
-        if (this.authMethod === 'Bearer Token') {
+        if (this.authMode === 'app') {
           throw new Error('Bearer token authentication cannot delete tweets - user authentication required');
         }
         
@@ -416,6 +473,27 @@ export class XBroadcaster {
   }
 
   /**
+   * Describe identity/permission errors accurately
+   */
+  describeAuthError(error) {
+    const code = error?.code ?? error?.response?.statusCode;
+    if (code === 401) {
+      return `${this.authMethod} credentials were rejected (401 Unauthorized): ${error.message}`;
+    }
+    if (code === 403) {
+      return `${this.authMethod} lacks permission (403 Forbidden) - check app permissions/scopes (OAuth 2.0 needs tweet.read, tweet.write, users.read): ${error.message}`;
+    }
+    return error.message;
+  }
+
+  /**
+   * Read-only connectivity check (never publishes)
+   */
+  async checkConnection() {
+    return this.test();
+  }
+
+  /**
    * Test the X.com configuration and connectivity
    */
   async test() {
@@ -429,28 +507,38 @@ export class XBroadcaster {
         };
       }
 
-      // For bearer token, we can only test by getting user info (limited)
-      if (this.authMethod === 'Bearer Token') {
+      // App-only bearer tokens have no user identity and cannot post
+      if (this.authMode === 'app') {
         return {
           success: true,
           platform: this.name,
-          message: 'X.com: Bearer token authentication configured (limited functionality - cannot post/delete tweets)'
+          canPost: false,
+          message: 'X.com: App-only bearer token configured (read-only - cannot post/delete tweets)'
         };
       }
 
-      // For user authentication, test by getting authenticated user info
+      // Read-only identity check for user context
       const userInfo = await this.client.v2.me();
-      
+      const username = userInfo?.data?.username;
+      if (!username) {
+        return {
+          success: false,
+          platform: this.name,
+          message: `X.com: ${this.authMethod} identity check returned no user`
+        };
+      }
+
       return {
         success: true,
         platform: this.name,
-        message: `X.com: Connection successful using ${this.authMethod} (authenticated as @${userInfo.data.username})`
+        canPost: true,
+        message: `X.com: Connection successful using ${this.authMethod} (authenticated as @${username})`
       };
     } catch (error) {
       return {
         success: false,
         platform: this.name,
-        message: `X.com: ${error.message}`
+        message: `X.com: ${this.describeAuthError(error)}`
       };
     }
   }

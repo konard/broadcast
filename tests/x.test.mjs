@@ -124,18 +124,11 @@ describe('X.com Integration Tests', () => {
     
     // Test authentication method detection
     console.log('🔍 Authentication methods detected:');
-    console.log(`   OAuth 2.0 User (Client ID/Secret): ${xBroadcaster.config.hasOAuth2UserAuth ? '✅' : '❌'}`);
+    console.log(`   OAuth 2.0 User (access token): ${xBroadcaster.config.hasOAuth2UserAuth ? '✅' : '❌'}`);
     console.log(`   OAuth 1.0a User (API Key/Secret): ${xBroadcaster.config.hasOAuth1UserAuth ? '✅' : '❌'}`);
     console.log(`   Bearer Token: ${xBroadcaster.config.hasBearerAuth ? '✅' : '❌'}`);
     
-    if (xBroadcaster.config.hasOAuth2UserAuth) {
-      console.log('🔑 Using OAuth 2.0 authentication with Client ID/Secret');
-      if (xBroadcaster.config.hasOAuth1UserAuth) {
-        console.log('📝 NOTE: OAuth 1.0a credentials also detected, but OAuth 2.0 takes priority');
-      }
-    } else if (xBroadcaster.config.hasOAuth1UserAuth) {
-      console.log('🔑 Using OAuth 1.0a authentication with API Key/Secret');
-    }
+    console.log(`🔑 Resolved authentication mode: ${xBroadcaster.config.authMode || 'none'}`);
     // At least one should be configured
     const hasAnyAuth = xBroadcaster.config.hasUserAuth || xBroadcaster.config.hasBearerAuth;
     expect(hasAnyAuth).toBe(true);
@@ -146,7 +139,7 @@ describe('X.com Integration Tests', () => {
     expect(xBroadcaster.authMethod).toBeTruthy();
     console.log(`🔧 Using authentication method: ${xBroadcaster.authMethod}`);
     
-    if (xBroadcaster.authMethod === 'Bearer Token') {
+    if (xBroadcaster.authMode === 'app') {
       console.log('⚠️  Bearer Token has limited functionality - cannot post or delete tweets');
     }
   });
@@ -172,7 +165,7 @@ describe('X.com Integration Tests', () => {
 
   test('should post tweet, get ID, and delete successfully', async () => {
     // Skip if using bearer token (cannot post)
-    if (xBroadcaster.authMethod === 'Bearer Token') {
+    if (xBroadcaster.authMode === 'app') {
       console.log('⏭️  Skipping post/delete test - Bearer Token cannot post tweets');
       expect(true).toBe(true); // Pass the test
       return;
@@ -298,7 +291,7 @@ describe('X.com Integration Tests', () => {
     const config = xBroadcaster.config;
     
     // Skip if using bearer token or not configured
-    if (!config.isValid || xBroadcaster.authMethod === 'Bearer Token') {
+    if (!config.isValid || xBroadcaster.authMode === 'app') {
       console.log('⏭️  Skipping delete error test - invalid config or bearer token');
       expect(true).toBe(true); // Pass the test
       return;
@@ -328,7 +321,7 @@ describe('X.com Integration Tests', () => {
 
   test('should handle bearer token limitations', async () => {
     // Only test if bearer token is configured
-    if (!xBroadcaster.config.hasBearerAuth || xBroadcaster.authMethod !== 'Bearer Token') {
+    if (!xBroadcaster.config.hasBearerAuth || xBroadcaster.authMode !== 'app') {
       console.log('⏭️  Skipping bearer token limitation test - not using bearer token');
       expect(true).toBe(true); // Pass the test
       return;
