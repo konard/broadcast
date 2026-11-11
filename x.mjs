@@ -466,6 +466,10 @@ export class XBroadcaster {
       errors.push(`Message is too long for X.com: ${message.length} characters (max ${MAX_TWEET_LENGTH})`);
     }
 
+    if (this.authMode === 'app') {
+      errors.push('App-only bearer token (X_BEARER_TOKEN) cannot post - configure OAuth 2.0 or OAuth 1.0a user authentication');
+    }
+
     return {
       isValid: errors.length === 0,
       errors

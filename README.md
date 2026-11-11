@@ -69,49 +69,45 @@ VK_ACCESS_TOKEN=your_personal_token
 
 ## X.com Support
 
-The X.com broadcaster supports multiple authentication methods with automatic prioritization:
+The X.com broadcaster supports three distinct authentication modes. Set `X_AUTH_MODE=oauth2|oauth1|app` to select one explicitly; otherwise it is detected automatically.
 
-**Authentication Priority Order:**
-1. **Client ID/Secret + Access Tokens** (if configured) - highest priority
-2. **API Key/Secret + Access Tokens** (if configured) - fallback
-3. **Bearer Token** (if configured) - lowest priority
+**Automatic priority:**
+1. **OAuth 1.0a user context** (all four OAuth 1.0a values present)
+2. **OAuth 2.0 user access token**
+3. **App-only bearer token** (read-only, cannot post)
 
-💡 **Note**: Both authentication methods use OAuth 1.0a flow but with different credential types. If both Client ID/Secret and API Key/Secret are configured, Client ID/Secret will be used automatically.
+Incomplete OAuth 1.0a credentials are reported as a configuration error instead of silently falling back.
 
-### OAuth 2.0-Style User Authentication (Modern Credentials)
+### OAuth 2.0 User Authentication
 ```bash
-X_CLIENT_ID=your_client_id_here
-X_CLIENT_SECRET=your_client_secret_here
-X_ACCESS_TOKEN=your_access_token_here
-X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
+X_OAUTH2_ACCESS_TOKEN=your_oauth2_user_access_token_here
+# or: X_ACCESS_TOKEN=... with no X_ACCESS_TOKEN_SECRET
 ```
-- **Use case**: Modern Client ID/Secret credentials with OAuth 1.0a authentication flow
-- **Capabilities**: Post tweets, delete tweets, full user functionality
-- **Setup**: Create app at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
-- **Note**: Uses Client ID/Secret from newer developer portal, but still requires Access Token/Secret
-- **Important**: Even with Client ID/Secret, X.com still requires Access Token/Secret for user authentication
+- **Use case**: An already-issued OAuth 2.0 (Authorization Code with PKCE) user access token
+- **Required scopes**: `tweet.read`, `tweet.write`, `users.read` (plus `offline.access` if you refresh tokens yourself)
+- **How it is used**: passed to the SDK as a bearer token (`new TwitterApi(userAccessToken)`), see the [twitter-api-v2 auth docs](https://github.com/PLhery/node-twitter-api-v2/blob/master/doc/auth.md)
+- **Note**: OAuth 2.0 has no access token secret. `X_CLIENT_ID`/`X_CLIENT_SECRET` are only needed to obtain or refresh tokens and are never used as OAuth 1.0a API keys.
 
-### OAuth 1.0a User Authentication (Legacy Credentials)
+### OAuth 1.0a User Authentication
 ```bash
 X_API_KEY=your_api_key_here
 X_API_KEY_SECRET=your_api_key_secret_here
 X_ACCESS_TOKEN=your_access_token_here
 X_ACCESS_TOKEN_SECRET=your_access_token_secret_here
 ```
-- **Use case**: Traditional API Key/Secret credentials with OAuth 1.0a authentication
-- **Capabilities**: Post tweets, delete tweets, full user functionality
-- **Setup**: Create app at [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
-- **Note**: Traditional API Key/Secret format (still supported by X.com)
-- **Important**: Access Token and Secret are user-specific credentials used to authenticate OAuth 1.0a API requests. They specify the X account the request is made on behalf of.
+- **Use case**: API Key/Secret (consumer keys) plus user Access Token/Secret
+- **Capabilities**: Post tweets, delete tweets
+- **Setup**: Create app at [X Developer Portal](https://developer.x.com/en/portal/dashboard) with "Read and write" permissions
 
-### Bearer Token Authentication (Limited)
+### App-only Bearer Token (Read-only)
 ```bash
 X_BEARER_TOKEN=your_bearer_token_here
 ```
-- **Use case**: App-only authentication, read-only access
-- **Capabilities**: Read-only operations, cannot post or delete tweets
-- **Setup**: Generate from your Twitter app dashboard
-- **Note**: Not suitable for broadcasting, mainly for testing connectivity
+- **Use case**: Application-only authentication (no user identity)
+- **Capabilities**: Read-only; publishing is rejected during pre-broadcast validation
+- **Note**: Not suitable for broadcasting
+
+See the [X authentication overview](https://docs.x.com/fundamentals/authentication/overview) for the difference between app-only and user-context tokens.
 
 ## Installation
 
@@ -142,7 +138,7 @@ X_BEARER_TOKEN=your_bearer_token_here
 
 4. **Edit `.env` file with your credentials**
    
-   **For Client ID/Secret (modern credentials):**
+   **For an OAuth 2.0 user access token:**
    ```bash
    # Telegram Configuration
    TELEGRAM_BOT_TOKEN=your_bot_token_here
@@ -152,11 +148,8 @@ X_BEARER_TOKEN=your_bearer_token_here
    VK_ACCESS_TOKEN=your_vk_token_here
    VK_OWNER_ID=-123456789
 
-   # X.com Configuration (Client ID/Secret)
-   X_CLIENT_ID=your_x_client_id_here
-   X_CLIENT_SECRET=your_x_client_secret_here
-   X_ACCESS_TOKEN=your_x_access_token_here
-   X_ACCESS_TOKEN_SECRET=your_x_access_token_secret_here
+   # X.com Configuration (OAuth 2.0 user token)
+   X_OAUTH2_ACCESS_TOKEN=your_x_oauth2_user_access_token_here
 
    # Optional
    LOG_LEVEL=info
@@ -213,9 +206,20 @@ bun run broadcast.mjs send "Multi-platform message" --platforms telegram,vk,x
 bun run broadcast.mjs send "Debug message" --verbose
 ```
 
-**Test configuration:**
+**Preview without sending:**
+```bash
+bun run broadcast.mjs send "Preview" --platforms telegram,vk --dry-run
+```
+
+**Test configuration (read-only, never publishes):**
 ```bash
 bun run broadcast.mjs test
+bun run broadcast.mjs test --platforms x
+```
+
+**Legacy form** (still supported, same as `send`):
+```bash
+bun run broadcast.mjs "Hello, World!" --platforms x
 ```
 
 ### Command Reference
@@ -231,15 +235,25 @@ bun run broadcast.mjs send <message> [options]
 - `<message>` - The message to broadcast (required)
 
 **Options:**
-- `-p, --platforms <platforms>` - Comma-separated platforms (telegram,vk,x,all) [default: all]
+- `-p, --platforms <platforms>` - Comma-separated platforms (telegram,vk,x,all) [default: all]; unknown entries are rejected
+- `-d, --dry-run` - Print what would be sent without publishing anything
 - `-v, --verbose` - Enable verbose logging
 - `-h, --help` - Display help
 
 #### `test` command
-Test configuration and platform connectivity.
+Test configuration and platform connectivity. By default this is read-only: configuration is validated for every selected platform, and X.com performs a read-only identity check (`GET /2/users/me`). Nothing is published.
 
 ```bash
-bun run broadcast.mjs test
+bun run broadcast.mjs test [--platforms <platforms>] [--live]
+```
+
+**Options:**
+- `-p, --platforms <platforms>` - Comma-separated platforms to test [default: all]
+- `--live` - Explicitly opt in to provider test helpers that **publish and then delete** a test message (Telegram, VK)
+
+#### Running the tests
+```bash
+bun test tests/cli.test.mjs tests/x.auth.test.mjs   # mocked, no network
 ```
 
 ## Configuration
@@ -257,12 +271,14 @@ bun run broadcast.mjs test
 | `TELEGRAM_USER_BOT_CHAT_ID` | User Auth | Target chat ID (alternative to username) | `123456789` |
 | `VK_ACCESS_TOKEN` | Yes | VK access token | `abc123def456...` |
 | `VK_OWNER_ID` | Yes | VK owner ID (negative for groups, positive for users) | `-123456789` or `123456789` |
-| `X_CLIENT_ID` | Client ID/Secret | X.com Client ID from developer portal | `your_client_id` |
-| `X_CLIENT_SECRET` | Client ID/Secret | X.com Client Secret from developer portal | `your_client_secret` |
+| `X_AUTH_MODE` | Optional | Force `oauth2`, `oauth1`, `app` or `auto` (default) | `oauth2` |
+| `X_OAUTH2_ACCESS_TOKEN` | OAuth 2.0 | OAuth 2.0 user access token (bearer) | `your_oauth2_user_token` |
+| `X_CLIENT_ID` | Optional | OAuth 2.0 Client ID (only for obtaining/refreshing tokens) | `your_client_id` |
+| `X_CLIENT_SECRET` | Optional | OAuth 2.0 Client Secret (only for obtaining/refreshing tokens) | `your_client_secret` |
 | `X_API_KEY` | API Key/Secret | X.com API key from developer portal | `your_api_key` |
 | `X_API_KEY_SECRET` | API Key/Secret | X.com API key secret from developer portal | `your_api_key_secret` |
-| `X_ACCESS_TOKEN` | Both methods | X.com access token (required for user authentication) | `your_access_token` |
-| `X_ACCESS_TOKEN_SECRET` | Both methods | X.com access token secret (required for user authentication) | `your_access_token_secret` |
+| `X_ACCESS_TOKEN` | OAuth 1.0a | OAuth 1.0a access token (without `X_ACCESS_TOKEN_SECRET` it is treated as an OAuth 2.0 user token) | `your_access_token` |
+| `X_ACCESS_TOKEN_SECRET` | OAuth 1.0a | OAuth 1.0a access token secret | `your_access_token_secret` |
 | `X_BEARER_TOKEN` | App-only | X.com bearer token (limited functionality) | `your_bearer_token` |
 | `LOG_LEVEL` | No | Logging level | `info` (default) |
 
