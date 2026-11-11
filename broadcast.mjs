@@ -4,7 +4,8 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import getenv from 'getenv';
 import * as dotenv from 'dotenv';
-import { existsSync } from 'fs';
+import { existsSync, realpathSync } from 'fs';
+import { fileURLToPath } from 'url';
 import { Logger } from './logger.mjs';
 import TelegramBroadcaster from './telegram.mjs';
 import VKBroadcaster from './vk.mjs';
@@ -13,25 +14,27 @@ import XBroadcaster from './x.mjs';
 // Load environment variables
 dotenv.config();
 
-// Initialize broadcasters
-const broadcasters = [
-  new TelegramBroadcaster(),
-  new VKBroadcaster(),
-  new XBroadcaster()
-];
+// Create the default broadcasters (lazily, so importing this module has no side effects)
+export function createDefaultBroadcasters() {
+  return [
+    new TelegramBroadcaster(),
+    new VKBroadcaster(),
+    new XBroadcaster()
+  ];
+}
 
 // Get broadcaster by name
-function getBroadcaster(name) {
+function getBroadcaster(broadcasters, name) {
   return broadcasters.find(b => b.name === name);
 }
 
 // Get all broadcaster names
-function getBroadcasterNames() {
+export function getBroadcasterNames(broadcasters) {
   return broadcasters.map(b => b.name);
 }
 
 // Main broadcast function
-async function broadcast(message, platforms) {
+export async function broadcast(message, platforms, broadcasters) {
   const logLevel = getenv('LOG_LEVEL', 'info');
   const logger = new Logger(logLevel);
   const results = [];
@@ -43,7 +46,7 @@ async function broadcast(message, platforms) {
     targetBroadcasters = broadcasters;
   } else {
     targetBroadcasters = platforms
-      .map(platform => getBroadcaster(platform))
+      .map(platform => getBroadcaster(broadcasters, platform))
       .filter(broadcaster => broadcaster !== undefined);
   }
 
@@ -113,138 +116,222 @@ async function broadcast(message, platforms) {
   return results;
 }
 
-// Test function
-async function testBroadcasters() {
-  const logger = new Logger('debug');
-  
-  console.log('🔧 Testing configuration...\n');
-  
-  // Check if .env file exists
+/**
+ * Parse and validate a comma-separated platform list.
+ * @returns {{platforms: string[], invalid: string[], valid: string[]}}
+ */
+export function parsePlatforms(value, broadcasters) {
+  const valid = [...getBroadcasterNames(broadcasters), 'all'];
+  const platforms = [...new Set(String(value ?? 'all')
+    .split(',')
+    .map(p => p.trim().toLowerCase())
+    .filter(p => p.length > 0))];
+  const invalid = platforms.filter(p => !valid.includes(p));
+  if (platforms.length === 0) invalid.push(String(value));
+  return { platforms, invalid, valid };
+}
+
+/**
+ * Configuration and connectivity test.
+ * Read-only by default: only broadcasters exposing checkConnection() are contacted.
+ * With live=true, provider test() helpers are used, which may publish and delete
+ * a test message (Telegram/VK).
+ */
+export async function testBroadcasters(targetBroadcasters, { live = false, out = console } = {}) {
+  out.log('🔧 Testing configuration...\n');
+
   if (existsSync('.env')) {
-    console.log('✅ .env file found');
+    out.log('✅ .env file found');
   } else {
-    console.log('⚠️  .env file not found, using environment variables');
+    out.log('⚠️  .env file not found, using environment variables');
   }
-  
-  console.log('\n🧪 Testing connectivity...');
-  
+
+  out.log(live ? '\n🧪 Testing connectivity (live: may publish and delete a test message)...' : '\n🧪 Testing connectivity (read-only)...');
+
   const results = [];
-  
-  // Test each broadcaster
-  for (const broadcaster of broadcasters) {
+
+  for (const broadcaster of targetBroadcasters) {
     if (!broadcaster.isConfigured()) {
       const errors = broadcaster.getConfigurationErrors();
-      console.log(`❌ ${broadcaster.displayName}: Configuration errors - ${errors.join(', ')}`);
+      out.log(`❌ ${broadcaster.displayName}: Configuration errors - ${errors.join(', ')}`);
       results.push({ success: false, platform: broadcaster.name });
-    } else {
-      try {
-        const result = await broadcaster.test();
-        if (result.success) {
-          console.log(`✅ ${result.message}`);
-        } else {
-          console.log(`❌ ${result.message}`);
-        }
-        results.push(result);
-      } catch (error) {
-        console.log(`❌ ${broadcaster.displayName}: ${error.message}`);
-        results.push({ success: false, platform: broadcaster.name });
+      continue;
+    }
+    try {
+      let result;
+      if (live && typeof broadcaster.test === 'function') {
+        result = await broadcaster.test();
+      } else if (typeof broadcaster.checkConnection === 'function') {
+        result = await broadcaster.checkConnection();
+      } else {
+        result = {
+          success: true,
+          platform: broadcaster.name,
+          message: `${broadcaster.displayName}: Configuration OK (connectivity check skipped; use --live to publish and delete a test message)`
+        };
       }
+      out.log(`${result.success ? '✅' : '❌'} ${result.message}`);
+      results.push(result);
+    } catch (error) {
+      out.log(`❌ ${broadcaster.displayName}: ${error.message}`);
+      results.push({ success: false, platform: broadcaster.name });
     }
   }
-  
-  console.log('\n✨ Test completed!');
-  
+
+  out.log('\n✨ Test completed!');
+
   const failedCount = results.filter(r => !r.success).length;
   if (failedCount > 0) {
-    console.log('\n💡 Copy .env.example to .env and fill in your credentials.');
-    process.exit(1);
+    out.log('\n💡 Copy .env.example to .env and fill in your credentials.');
+  }
+  return results;
+}
+
+function selectBroadcasters(platforms, broadcasters) {
+  if (platforms.includes('all')) return broadcasters;
+  return platforms.map(p => getBroadcaster(broadcasters, p)).filter(Boolean);
+}
+
+/**
+ * Run the CLI.
+ * @param {string[]} args - CLI arguments (without node/bun and script path)
+ * @param {object} [deps]
+ * @param {Function} [deps.createBroadcasters] - factory for broadcasters (mockable)
+ * @param {object} [deps.out] - console-like output ({log, error})
+ * @returns {Promise<number>} exit code
+ */
+export async function runCli(args, { createBroadcasters = createDefaultBroadcasters, out = console } = {}) {
+  let exitCode = 0;
+  let broadcasters = null;
+  const getBroadcasters = () => (broadcasters ??= createBroadcasters());
+
+  const resolvePlatforms = (value) => {
+    const parsed = parsePlatforms(value, getBroadcasters());
+    if (parsed.invalid.length > 0) {
+      out.error(`❌ Invalid platforms: ${parsed.invalid.join(', ')}`);
+      out.error(`Valid platforms: ${parsed.valid.join(', ')}`);
+      exitCode = 1;
+      return null;
+    }
+    return parsed.platforms;
+  };
+
+  const sendHandler = async (argv) => {
+    if (argv.verbose) process.env.LOG_LEVEL = 'debug';
+
+    const message = argv.message;
+    if (typeof message !== 'string' || message.length === 0) {
+      out.error('❌ Message is required');
+      exitCode = 1;
+      return;
+    }
+
+    const platforms = resolvePlatforms(argv.platforms);
+    if (!platforms) return;
+
+    if (argv.dryRun) {
+      out.log(`🧪 Dry run: Broadcasting message to: ${platforms.join(', ')}`);
+      out.log(`📝 Message: ${message}`);
+      out.log('✅ Dry run completed (no actual send)');
+      return;
+    }
+
+    try {
+      out.log(`🚀 Broadcasting message to: ${platforms.join(', ')}`);
+      out.log(`📝 Message: ${message}`);
+      out.log('');
+
+      const results = await broadcast(message, platforms, getBroadcasters());
+
+      out.log('\n📊 Results:');
+      results.forEach(({ platform, success, error }) => {
+        if (success) {
+          out.log(`✅ ${platform.toUpperCase()}: Success`);
+        } else {
+          out.log(`❌ ${platform.toUpperCase()}: Failed - ${error}`);
+        }
+      });
+
+      if (results.length === 0 || results.some(r => !r.success)) exitCode = 1;
+    } catch (error) {
+      out.error('❌ Broadcast failed:', error.message);
+      exitCode = 1;
+    }
+  };
+
+  const testHandler = async (argv) => {
+    if (argv.verbose) process.env.LOG_LEVEL = 'debug';
+    const platforms = resolvePlatforms(argv.platforms);
+    if (!platforms) return;
+    const results = await testBroadcasters(selectBroadcasters(platforms, getBroadcasters()), { live: argv.live, out });
+    if (results.some(r => !r.success)) exitCode = 1;
+  };
+
+  const messagePositional = (y) => y.positional('message', {
+    describe: 'Message to broadcast (passed unchanged)',
+    type: 'string'
+  });
+
+  const parser = yargs(args)
+    .scriptName('broadcast')
+    .version('0.0.2')
+    .parserConfiguration({ 'parse-positional-numbers': false })
+    .command('send <message>', 'Broadcast a message to specified platforms', messagePositional, sendHandler)
+    .command('test', 'Test configuration and read-only connectivity (no messages are published unless --live)', (y) => y
+      .option('live', {
+        describe: 'Use provider test helpers that publish and delete a test message (Telegram, VK)',
+        type: 'boolean',
+        default: false
+      }), testHandler)
+    // Backwards-compatible default: `broadcast "<message>"`
+    .command('$0 [message]', 'Broadcast a message (same as `send <message>`)', messagePositional, sendHandler)
+    .option('platforms', {
+      alias: 'p',
+      describe: 'Comma-separated list of platforms (telegram,vk,x,all)',
+      type: 'string',
+      default: 'all'
+    })
+    .option('dry-run', {
+      alias: 'd',
+      describe: 'Dry run mode (do not send, just log)',
+      type: 'boolean',
+      default: false
+    })
+    .option('verbose', {
+      alias: 'v',
+      describe: 'Verbose output',
+      type: 'boolean',
+      default: false
+    })
+    .strictCommands()
+    .help()
+    .exitProcess(false)
+    .fail((msg, err) => {
+      out.error(`❌ ${msg || err?.message}`);
+      exitCode = 1;
+    });
+
+  try {
+    await parser.parseAsync();
+  } catch (error) {
+    if (exitCode === 0) {
+      out.error(`❌ ${error.message}`);
+      exitCode = 1;
+    }
+  }
+  return exitCode;
+}
+
+function isMainModule() {
+  if (import.meta.main !== undefined) return import.meta.main;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
   }
 }
 
-// CLI setup with yargs
-const argv = yargs(hideBin(process.argv))
-  .scriptName('broadcast')
-  .usage('$0 <message> [options]')
-  .version('0.0.1')
-  .positional('message', {
-    describe: 'Message to broadcast',
-    type: 'string'
-  })
-  .option('platforms', {
-    alias: 'p',
-    describe: 'Comma-separated list of platforms',
-    type: 'string',
-    default: 'all',
-    choices: [...getBroadcasterNames(), 'all']
-  })
-  .option('dry-run', {
-    alias: 'd',
-    describe: 'Dry run mode (do not send, just log)',
-    type: 'boolean',
-    default: false
-  })
-  .option('verbose', {
-    alias: 'v',
-    describe: 'Verbose output',
-    type: 'boolean',
-    default: false
-  })
-  .demandCommand(0)
-  .help()
-  .argv;
-
-(async () => {
-  if (argv.verbose) {
-    process.env.LOG_LEVEL = 'debug';
-  }
-
-  const message = argv.message || argv._[0];
-  if (!message) {
-    console.error('❌ Message is required');
-    process.exit(1);
-  }
-
-  const platforms = argv.platforms.split(',').map(p => p.trim().toLowerCase());
-  const validPlatforms = [...getBroadcasterNames(), 'all'];
-
-  // Validate platforms
-  const invalidPlatforms = platforms.filter(p => !validPlatforms.includes(p));
-  if (invalidPlatforms.length > 0) {
-    console.error(`❌ Invalid platforms: ${invalidPlatforms.join(', ')}`);
-    console.error(`Valid platforms: ${validPlatforms.join(', ')}`);
-    process.exit(1);
-  }
-
-  if (argv['dry-run']) {
-    console.log(`🧪 Dry run: Broadcasting message to: ${platforms.join(', ')}`);
-    console.log(`📝 Message: ${message}`);
-    console.log('✅ Dry run completed (no actual send)');
-    return;
-  }
-
-  try {
-    console.log(`🚀 Broadcasting message to: ${platforms.join(', ')}`);
-    console.log(`📝 Message: ${message}`);
-    console.log('');
-
-    const results = await broadcast(message, platforms);
-
-    console.log('\n📊 Results:');
-    results.forEach(({ platform, success, error }) => {
-      if (success) {
-        console.log(`✅ ${platform.toUpperCase()}: Success`);
-      } else {
-        console.log(`❌ ${platform.toUpperCase()}: Failed - ${error}`);
-      }
-    });
-
-    const failedCount = results.filter(r => !r.success).length;
-    if (failedCount > 0) {
-      process.exit(1);
-    }
-
-  } catch (error) {
-    console.error('❌ Broadcast failed:', error.message);
-    process.exit(1);
-  }
-})();
+if (isMainModule()) {
+  const code = await runCli(hideBin(process.argv));
+  process.exit(code);
+}
